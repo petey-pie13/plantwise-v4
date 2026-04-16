@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Advisory - PlantWise</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/advisory_enhanced.css') }}">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Crop Advisory & Diagnostics System</p>
+                </div>
+            </div>
+            <button class="admin-btn" onclick="window.location.href='/admin'">
+                <span>Admin Panel</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Back Link -->
+    <a href="/" class="back-link">
+        <span>←</span>
+        <span>Back to Home</span>
+    </a>
+
+    <!-- Advisory Wizard -->
+    <div class="container" style="padding: var(--spacing-2xl) var(--spacing-xl);">
+    <!-- Advisory Wizard -->
+    <div class="container" style="padding: var(--spacing-2xl) var(--spacing-xl);">
+        <!-- Progress Indicator -->
+        <div class="progress-container">
+            <div class="progress-bars">
+                <div class="progress-bar active" id="progress-1"></div>
+                <div class="progress-bar" id="progress-2"></div>
+                <div class="progress-bar" id="progress-3"></div>
+                <div class="progress-bar" id="progress-4"></div>
+            </div>
+            <p class="progress-text" id="progress-text">Step 1 of 4</p>
+        </div>
+
+        <!-- Form -->
+        <form id="advisory-form" onsubmit="event.preventDefault(); submitAdvisory();">
+            
+            <!-- STEP 1: Location -->
+            <div class="step active" id="step-1">
+                <div class="step-header">
+                    <div class="step-icon"></div>
+                    <div class="step-title">
+                        <h2>Location Information</h2>
+                        <p>We're identifying your area to give you precise recommendations</p>
+                    </div>
+                </div>
+
+                <!-- Location detection status banner -->
+                <div id="location-status" class="location-banner loading">
+                    <span id="location-icon">📍</span>
+                    <span id="location-message">Detecting your location...</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="county">County</label>
+                    <select class="form-select" id="county" name="county" required>
+                        <option value="">Select County</option>
+                        {% for county in counties %}
+                        <option value="{{ county }}">{{ county }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="sub_county">Sub-County</label>
+                    <select class="form-select" id="sub_county" name="sub_county">
+                        <option value="">Select Sub-County</option>
+                    </select>
+                </div>
+
+                <!-- Hidden coordinate fields -->
+                <input type="hidden" id="latitude"  name="latitude">
+                <input type="hidden" id="longitude" name="longitude">
+            </div>
+
+            <!-- STEP 2: Conditions (rainfall and temperature auto-filled) -->
+            <div class="step" id="step-2" style="display:none;">
+                <div class="step-header">
+                    <div class="step-icon"></div>
+                    <div class="step-title">
+                        <h2>Ecological Conditions</h2>
+                        <p>Based on your location, we've fetched the current environment patterns</p>
+                    </div>
+                </div>
+
+                <!-- Auto-detected conditions card (shown when GPS works) -->
+                <div id="auto-conditions-card" style="display:none;">
+                    <div class="conditions-card">
+                        <h4>Conditions Detected for Your Area</h4>
+                        <div class="condition-row">
+                            <span class="condition-label">Rainfall (last 30 days)</span>
+                            <span id="display-rainfall" class="condition-value"></span>
+                        </div>
+                        <div class="condition-row">
+                            <span class="condition-label">Average Temperature</span>
+                            <span id="display-temperature" class="condition-value"></span>
+                        </div>
+                        <div class="condition-source">
+                            Source: Open-Meteo real-time data
+                        </div>
+                        <button type="button" class="btn-text" id="btn-manual-override"
+                                onclick="showManualConditions()">
+                            Enter conditions manually instead
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual conditions (shown as fallback or on request) -->
+                <div id="manual-conditions">
+                    <div class="form-group">
+                        <label class="form-label" for="rainfall">Rainfall Level</label>
+                        <select class="form-select" id="rainfall" name="rainfall">
+                            <option value="">Select rainfall level</option>
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="temperature">Temperature Range</label>
+                        <select class="form-select" id="temperature" name="temperature">
+                            <option value="">Select temperature range</option>
+                            <option value="Low">Low (Cool highlands, below 20°C)</option>
+                            <option value="Medium">Medium (Moderate, 20 to 28°C)</option>
+                            <option value="High">High (Warm lowlands, above 28°C)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Hidden fields carrying auto-detected values -->
+                <input type="hidden" id="rainfall-value"     name="rainfall_val">
+                <input type="hidden" id="temperature-value"  name="temperature_val">
+            </div>
+
+            <!-- STEP 3: Soil pH -->
+            <div class="step" id="step-3" style="display:none;">
+                <div class="step-header">
+                    <div class="step-icon"></div>
+                    <div class="step-title">
+                        <h2>Soil pH & Profile</h2>
+                        <p>Adjust the slider if you have a recent soil test result</p>
+                    </div>
+                </div>
+
+                <!-- County soil info card (loads after county selected) -->
+                <div id="soil-info-card" style="display:none; margin-bottom: 2rem;">
+                    <div class="soil-card">
+                        <div class="soil-type-label" id="soil-type-display"></div>
+                        <p id="soil-description-display" class="soil-description"></p>
+                    </div>
+                </div>
+
+                <!-- pH display and slider -->
+                <div class="ph-section">
+                    <div class="ph-value-display">
+                        <span class="ph-number" id="ph-number-display">6.0</span>
+                        <div class="ph-fuzzy-badge" id="ph-fuzzy-badge">
+                            <span id="ph-fuzzy-label">Near Neutral</span>
+                            <span id="ph-fuzzy-range" class="ph-range-text"></span>
+                        </div>
+                    </div>
+
+                    <input type="range"
+                           id="soil_ph"
+                           name="soil_ph"
+                           min="3.0" max="10.0" step="0.1"
+                           value="6.0"
+                           class="ph-slider"
+                           oninput="onPhSliderChange(this.value)">
+
+                    <div class="ph-scale-labels">
+                        <span>3.0</span>
+                        <span>Acidic</span>
+                        <span>7.0 Neutral</span>
+                        <span>Alkaline</span>
+                        <span>10.0</span>
+                    </div>
+
+                    <div id="ph-description-display" class="ph-description"></div>
+                    <div id="ph-liming-advice"        class="ph-liming"></div>
+                </div>
+
+                <!-- pH confidence toggle -->
+                <div class="ph-confidence-section">
+                    <p class="ph-county-note" id="ph-county-note"></p>
+                    <div class="ph-toggle-buttons">
+                        <button type="button"
+                                id="btn-use-county-ph"
+                                class="ph-toggle active"
+                                onclick="useCountyDefaultPh()">
+                            Use county estimate
+                        </button>
+                        <button type="button"
+                                id="btn-use-manual-ph"
+                                class="ph-toggle"
+                                onclick="useManualPh()">
+                            I know my soil pH
+                        </button>
+                    </div>
+                </div>
+
+                <input type="hidden" id="ph-confidence" name="ph_confidence" value="county_default">
+            </div>
+
+            <!-- STEP 4: Review -->
+            <div class="step" id="step-4" style="display:none;">
+                <div class="step-header">
+                    <div class="step-icon"></div>
+                    <div class="step-title">
+                        <h2>Review Your Information</h2>
+                        <p>Please confirm your details before we generate recommendations</p>
+                    </div>
+                </div>
+
+                <div class="review-summary">
+                    <div class="review-row">
+                        <span class="review-label">Location</span>
+                        <span class="review-value" id="review-location"></span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Rainfall</span>
+                        <span class="review-value" id="review-rainfall"></span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Temperature</span>
+                        <span class="review-value" id="review-temperature"></span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Soil pH</span>
+                        <span class="review-value" id="review-ph"></span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Soil Type</span>
+                        <span class="review-value" id="review-soil-type"></span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Conditions Source</span>
+                        <span class="review-value" id="review-source"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="nav-buttons">
+                <button type="button" class="btn btn-outline" id="prev-btn" onclick="prevStep()" style="display:none;">
+                    Previous
+                </button>
+                <button type="button" class="btn btn-success" id="next-btn" onclick="nextStep()">
+                    Next
+                </button>
+                <button type="button" class="btn btn-success" id="btn-get-recommendations" onclick="submitAdvisory()" style="display:none;">
+                    Get My Recommendations
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/advisory.js') }}"></script>
+
+</body>
+
+</html>

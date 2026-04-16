@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ action }} Crop - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <span class="logo-icon"><i data-lucide="leaf"></i></span>
+                    <span class="logo-text">PlantWise</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item logout-btn">
+                    <span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">{{ action }} Crop</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <span class="profile-avatar"><i data-lucide="user" style="width:18px;height:18px;"></i></span>
+                        <div>
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category == 'success' %}✓{% elif category == 'error' %}✕{% else %}ℹ{%
+                        endif %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <!-- Breadcrumb -->
+                <div class="breadcrumb">
+                    <a href="{{ url_for('admin_crops') }}">← Back to Crops</a>
+                </div>
+
+                <!-- Form Card -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <h2>{{ action }} Crop Details</h2>
+                        <p>{% if action == 'Add' %}Fill in the crop information below.{% else %}Update the crop details
+                            below.{% endif %}</p>
+                    </div>
+
+                    <form method="POST" class="crop-form" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <!-- Row 1: Name + Scientific Name -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label required">Crop Name</label>
+                                <input type="text" name="crop_name" class="form-input"
+                                    value="{{ crop.crop_name if crop else '' }}" placeholder="e.g. Maize" required>
+                                <span class="field-hint">Common/market name of the crop</span>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Scientific Name</label>
+                                <input type="text" name="scientific_name" class="form-input"
+                                    value="{{ crop.scientific_name if crop else '' }}" placeholder="e.g. Zea mays">
+                            </div>
+                        </div>
+
+                        <!-- Row 2: Season + Growth Period -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Season</label>
+                                <select name="season" class="form-input">
+                                    <option value="">— Select Season —</option>
+                                    {% for s in seasons %}
+                                    <option value="{{ s }}" {% if crop and crop.season==s %}selected{% endif %}>
+                                        {{ s }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Growth Period (days)</label>
+                                <input type="number" name="growth_period_days" class="form-input"
+                                    value="{{ crop.growth_period_days if crop else '' }}" placeholder="e.g. 120" min="1"
+                                    max="999">
+                            </div>
+                        </div>
+
+                        <!-- Row 3: Yield Potential -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Yield Potential</label>
+                                <input type="text" name="yield_potential" class="form-input"
+                                    value="{{ crop.yield_potential if crop else '' }}"
+                                    placeholder="e.g. 30–40 bags/acre">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Image URL</label>
+                                <input type="url" name="crop_image_url" class="form-input" id="image-url-input"
+                                    value="{{ crop.crop_image_url if crop else '' }}" placeholder="https://..."
+                                    oninput="previewImage(this.value)">
+                            </div>
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div class="form-group" id="image-preview-container"
+                            style="{{ 'display:block' if crop and crop.crop_image_url else 'display:none' }}">
+                            <label class="form-label">Image Preview</label>
+                            <img id="image-preview"
+                                src="{{ crop.crop_image_url if crop and crop.crop_image_url else '' }}"
+                                alt="Crop preview"
+                                style="width:120px;height:90px;object-fit:cover;border-radius:var(--radius-md);border:1px solid var(--border-color);"
+                                onerror="this.src='https://via.placeholder.com/120x90?text=No+Image'">
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-input form-textarea"
+                                placeholder="Brief description of the crop, its uses, and growing conditions...">{{ crop.description if crop else '' }}</textarea>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="form-actions">
+                            <a href="{{ url_for('admin_crops') }}" class="btn-admin btn-admin-ghost">Cancel</a>
+                            <button type="submit" class="btn-admin btn-admin-primary">
+                                {% if action == 'Add' %}Add Crop{% else %}Save Changes{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .breadcrumb {
+            margin-bottom: 1.5rem;
+        }
+
+        .breadcrumb a {
+            color: var(--accent-green);
+            text-decoration: none;
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-medium);
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            max-width: 860px;
+        }
+
+        .form-card-header {
+            padding: 1.75rem 2rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+
+        .form-card-header h2 {
+            margin: 0 0 0.25rem;
+            font-size: var(--font-size-xl);
+        }
+
+        .form-card-header p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: var(--font-size-sm);
+        }
+
+        .crop-form {
+            padding: 1.75rem 2rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-bottom: 0;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: var(--font-weight-semibold);
+            color: var(--text-dark);
+            margin-bottom: 0.4rem;
+            font-size: var(--font-size-sm);
+        }
+
+        .form-label.required::after {
+            content: ' *';
+            color: var(--error-red);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-base);
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+            background: white;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-green);
+            box-shadow: 0 0 0 3px rgba(95, 184, 140, 0.12);
+        }
+
+        .form-textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .field-hint {
+            font-size: 0.72rem;
+            color: var(--text-light);
+            margin-top: 0.2rem;
+            display: block;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 0.5rem;
+        }
+
+        .btn-admin {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 1.35rem;
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            transition: all var(--transition-fast);
+        }
+
+        .btn-admin-primary {
+            background: var(--primary-green);
+            color: white;
+        }
+
+        .btn-admin-primary:hover {
+            background: var(--primary-green-dark);
+        }
+
+        .btn-admin-ghost {
+            background: transparent;
+            color: var(--text-medium);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-admin-ghost:hover {
+            background: var(--bg-light);
+        }
+
+        @media(max-width:600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+        function previewImage(url) {
+            const container = document.getElementById('image-preview-container');
+            const img = document.getElementById('image-preview');
+            if (url) {
+                container.style.display = 'block';
+                img.src = url;
+            } else {
+                container.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>

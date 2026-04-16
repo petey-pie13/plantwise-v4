@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Recommendations - PlantWise</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Crop Advisory & Diagnostics System</p>
+                </div>
+            </div>
+            <button class="admin-btn" onclick="window.location.href='/admin'">
+                <span>Admin Panel</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Back Link -->
+    <a href="/advisory" class="back-link">
+        <span>←</span>
+        <span>Back to Home</span>
+    </a>
+
+    <!-- Results Section -->
+    <div class="container" style="padding: var(--spacing-2xl) var(--spacing-xl);">
+        {% if recommended_crops %}
+        <div style="text-align: center; margin-bottom: var(--spacing-2xl);">
+            <h1>Your Crop Recommendations</h1>
+            <p style="color: var(--text-medium); font-size: var(--font-size-lg);">
+                Top {{ recommended_crops|length }} crops perfectly suited for your conditions
+            </p>
+        </div>
+
+        <!-- Recommendation Grid -->
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--spacing-xl); margin-bottom: var(--spacing-2xl);">
+            {% for crop in recommended_crops %}
+            <div class="crop-card"
+                style="background: var(--card-bg); border-radius: var(--border-radius-lg); overflow: hidden; box-shadow: var(--shadow-md); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;"
+                onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='var(--shadow-lg)'"
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='var(--shadow-md)'">
+
+                <!-- Rank Badge -->
+                <div style="position: relative;">
+                    <div
+                        style="position: absolute; top: 12px; left: 12px; background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; box-shadow: var(--shadow-md); z-index: 10;">
+                        {{ crop.rank }}
+                    </div>
+
+                    <!-- Crop Image -->
+                    {% if crop.crop_image_url %}
+                    <img src="{{ crop.crop_image_url }}" alt="{{ crop.name }}"
+                        style="width: 100%; height: 180px; object-fit: cover;"
+                        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22180%22%3E%3Crect fill=%22%23e0e0e0%22 width=%22400%22 height=%22180%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-size=%2224%22 fill=%22%23999%22%3E{{ crop.name|urlencode }}%3C/text%3E%3C/svg%3E'">
+                    {% else %}
+                    <div
+                        style="width: 100%; height: 180px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 48px;">
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Card Content -->
+                <div style="padding: var(--spacing-lg);">
+                    <!-- Crop Name & Score -->
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <h3
+                            style="margin: 0 0 var(--spacing-xs) 0; font-size: var(--font-size-xl); color: var(--text-dark);">
+                            {{ crop.name }}</h3>
+                        {% if crop.scientific_name %}
+                        <p
+                            style="margin: 0; font-size: var(--font-size-sm); color: var(--text-medium); font-style: italic;">
+                            {{ crop.scientific_name }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Suitability Score -->
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-xs);">
+                            <span
+                                style="font-size: var(--font-size-sm); font-weight: 600; color: var(--text-medium);">Suitability</span>
+                            <span
+                                style="font-size: var(--font-size-lg); font-weight: bold; color: var(--success-color);">{{
+                                crop.suitability_score }}%</span>
+                        </div>
+                        <div
+                            style="background: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div
+                                style='background: linear-gradient(90deg, var(--success-color), var(--primary-color)); height: 100%; width: {{ crop.suitability_score }}%; transition: width 0.3s;'>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div
+                        style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-md); padding: var(--spacing-sm); background: var(--bg-light); border-radius: var(--border-radius-md);">
+                        {% if crop.growth_period %}
+                        <div style="text-align: center;">
+                            <div style="font-size: var(--font-size-xs); color: var(--text-medium);">Growth Period</div>
+                            <div style="font-size: var(--font-size-sm); font-weight: 600; color: var(--text-dark);">{{
+                                crop.growth_period }} days</div>
+                        </div>
+                        {% endif %}
+                        {% if crop.season %}
+                        <div style="text-align: center;">
+                            <div style="font-size: var(--font-size-xs); color: var(--text-medium);">Season</div>
+                            <div style="font-size: var(--font-size-sm); font-weight: 600; color: var(--text-dark);">{{
+                                crop.season }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Conditions Note -->
+                    <p
+                        style="font-size: var(--font-size-sm); color: var(--text-medium); margin: 0 0 var(--spacing-md) 0; line-height: 1.4;">
+                        {{ crop.notes | truncate(80) }}
+                    </p>
+
+                    <!-- Details Toggle -->
+                    <button id="btn-{{ crop.id }}" onclick="toggleDetails('details-{{ crop.id }}')"
+                        style="width: 100%; padding: var(--spacing-sm); background: var(--accent-green); color: white; border: none; border-radius: var(--border-radius-md); cursor: pointer; font-weight: 600; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: var(--spacing-sm);"
+                        onmouseover="this.style.background='var(--accent-green-light)'"
+                        onmouseout="this.style.background='var(--accent-green)'">
+                        <span>View Details</span>
+                        <span id="arrow-{{ crop.id }}"
+                            style="transition: transform 0.3s; display: inline-block;">▼</span>
+                    </button>
+
+                    <!-- Expandable Details -->
+                    <div id="details-{{ crop.id }}" class="hidden"
+                        style="margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--border-color);">
+                        <h4
+                            style="margin: 0 0 var(--spacing-sm) 0; font-size: var(--font-size-md); color: var(--text-dark);">
+                            Crop Requirements</h4>
+                        <div style="font-size: var(--font-size-sm); color: var(--text-medium); line-height: 1.6;">
+                            <div style="margin-bottom: var(--spacing-xs);"><strong>Optimal pH:</strong> {{
+                                crop.ph_optimal }}</div>
+                            <div style="margin-bottom: var(--spacing-xs);"><strong>pH Range:</strong> {{ crop.ph_range
+                                }}</div>
+                            <div style="margin-bottom: var(--spacing-xs);"><strong>Rainfall:</strong> {{
+                                crop.rainfall_range }}</div>
+                            <div style="margin-bottom: var(--spacing-xs);"><strong>Temperature:</strong> {{
+                                crop.temp_range }}</div>
+                            {% if crop.yield_potential %}
+                            <div style="margin-bottom: var(--spacing-xs);"><strong>Yield:</strong> {{
+                                crop.yield_potential }}</div>
+                            {% endif %}
+                            {% if crop.description %}
+                            <div
+                                style="margin-top: var(--spacing-sm); padding-top: var(--spacing-sm); border-top: 1px solid var(--border-color);">
+                                {{ crop.description }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: var(--spacing-md); justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-outline" onclick="window.location.href='/advisory'" style="min-width: 160px;">
+                New Analysis
+            </button>
+            <button class="btn btn-success" onclick="window.print()" style="min-width: 160px;">
+                Print Report
+            </button>
+        </div>
+
+        {% else %}
+        <!-- No Results -->
+        <div style="text-align: center; padding: var(--spacing-3xl);">
+            <div style="font-size: 64px; margin-bottom: var(--spacing-lg);"></div>
+            <h2>No Suitable Crops Found</h2>
+            <p style="color: var(--text-medium); margin-bottom: var(--spacing-xl);">
+                We couldn't find crops that match your exact conditions. Please try adjusting your parameters.
+            </p>
+            <button class="btn btn-success" onclick="window.location.href='/advisory'">
+                Try Again
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleDetails(id) {
+            const element = document.getElementById(id);
+            const button = event.target.closest('button');
+            const buttonText = button.querySelector('span:first-child');
+            const arrow = document.getElementById('arrow-' + id.replace('details-', ''));
+            const isHidden = element.classList.contains('hidden');
+
+            element.classList.toggle('hidden');
+            buttonText.textContent = isHidden ? 'Hide Details' : 'View Details';
+            arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Form Test</title>
+</head>
+
+<body>
+    <h1>Simple Form Test</h1>
+    <form method="POST" action="/advisory">
+        <label>County:</label>
+        <select name="county" required>
+            <option value="">Select</option>
+            <option value="Nairobi">Nairobi</option>
+            <option value="Mombasa">Mombasa</option>
+        </select>
+        <br><br>
+
+        <label>Soil pH:</label>
+        <input type="number" name="soil_ph" value="6.5" step="0.1" min="3" max="10" required>
+        <br><br>
+
+        <label>Rainfall:</label>
+        <select name="rainfall" required>
+            <option value="">Select</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+        </select>
+        <br><br>
+
+        <label>Temperature:</label>
+        <select name="temperature" required>
+            <option value="">Select</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+        </select>
+        <br><br>
+
+        <button type="submit">Submit Test</button>
+    </form>
+
+    <script>
+        document.querySelector('form').addEventListener('submit', function (e) {
+            console.log('Form submitting!');
+            console.log('County:', document.querySelector('[name="county"]').value);
+            console.log('Soil pH:', document.querySelector('[name="soil_ph"]').value);
+            console.log('Rainfall:', document.querySelector('[name="rainfall"]').value);
+            console.log('Temperature:', document.querySelector('[name="temperature"]').value);
+        });
+    </script>
+</body>
+
+</html>

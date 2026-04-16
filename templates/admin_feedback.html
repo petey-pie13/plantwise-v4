@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnosis Feedback - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="message-square"></i></span><span>Feedback</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;">
+                    <span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">Diagnosis Feedback</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category=='success'%}✓{% elif category=='error'%}✕{% else %}ℹ{% endif
+                        %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <!-- Summary Cards -->
+                <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 1.5rem;">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:linear-gradient(135deg,#4a9b7f,#2d5f4f);"><i data-lucide="message-square" style="color:white;width:24px;height:24px;"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value">{{ total }}</div>
+                            <div class="stat-label">Total Responses</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:linear-gradient(135deg,#16a34a,#065f46);"><i data-lucide="thumbs-up" style="color:white;width:24px;height:24px;"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value">{{ correct_count }}</div>
+                            <div class="stat-label">Marked Correct</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:linear-gradient(135deg,#dc2626,#991b1b);"><i data-lucide="thumbs-down" style="color:white;width:24px;height:24px;"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value">{{ incorrect_count }}</div>
+                            <div class="stat-label">Marked Incorrect</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:linear-gradient(135deg,#2563eb,#1e40af);"><i data-lucide="target" style="color:white;width:24px;height:24px;"></i></div>
+                        <div class="stat-info">
+                            <div class="stat-value">{{ accuracy }}%</div>
+                            <div class="stat-label">Accuracy Rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accuracy Bar -->
+                {% if total > 0 %}
+                <div
+                    style="background:white;border-radius:var(--radius-lg);padding:1rem 1.5rem;margin-bottom:1.5rem;border:1px solid var(--border-color);box-shadow:var(--shadow-sm);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                        <span style="font-weight:600;font-size:var(--font-size-sm);color:var(--text-medium);">User
+                            Accuracy Rating</span>
+                        <span style="font-weight:700;color:var(--primary-green);">{{ accuracy }}%</span>
+                    </div>
+                    <div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;">
+                        <div
+                            style="height:100%;width:{{ accuracy }}%;background:linear-gradient(90deg,#4a9b7f,#16a34a);border-radius:4px;transition:width 0.8s ease;">
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Feedback Table -->
+                <div class="data-table-container">
+                    {% if feedback_rows %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Disease Diagnosed</th>
+                                <th>Verdict</th>
+                                <th>Session Ref</th>
+                                <th>IP Address</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in feedback_rows %}
+                            <tr>
+                                <td><span style="color:var(--text-light)">#{{ loop.index }}</span></td>
+                                <td><strong>{{ row.disease_name or '—' }}</strong></td>
+                                <td>
+                                    {% if row.was_correct %}
+                                    <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;background:#d1fae5;color:#065f46;">
+                                        Correct
+                                    </span>
+                                    {% else %}
+                                    <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;background:#fee2e2;color:#991b1b;">
+                                        Incorrect
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size:0.78rem;color:var(--text-light);font-family:monospace;">{{
+                                    row.session_ref or '—' }}</td>
+                                <td style="font-size:0.78rem;color:var(--text-light);">{{ row.ip_address or '—' }}</td>
+                                <td style="font-size:0.78rem;color:var(--text-medium);">
+                                    {% if row.created_at %}
+                                    {{ row.created_at.strftime('%d %b %Y, %H:%M') }}
+                                    {% else %}—{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <div style="padding:0.75rem 1rem;font-size:var(--font-size-sm);color:var(--text-light);">
+                        Showing {{ feedback_rows|length }} most recent responses
+                    </div>
+                    {% else %}
+                    <div class="empty-state" style="padding:3rem 2rem;text-align:center;">
+                        <div style="margin-bottom:1rem;color:var(--text-light);"><i data-lucide="message-square" style="width:48px;height:48px;"></i></div>
+                        <h3>No Feedback Yet</h3>
+                        <p style="color:var(--text-light);margin-bottom:1rem;">
+                            Users have not submitted any diagnosis feedback yet.<br>
+                            Feedback appears when users rate diagnoses on the results page.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .stats-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: var(--font-size-sm);
+            color: var(--text-medium);
+            margin-top: 2px;
+        }
+
+        .data-table-container {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: var(--bg-light);
+            padding: 0.875rem 1rem;
+            text-align: left;
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--text-medium);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+            font-size: var(--font-size-sm);
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--bg-light);
+        }
+    </style>
+
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disease Management - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item"><span class="nav-icon"><i data-lucide="message-square"></i></span><span>Feedback</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;">
+                    <span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">Disease Management</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category=='success'%}✓{% elif category=='error'%}✕{% else %}ℹ{% endif
+                        %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <!-- Info Banner -->
+                <div class="info-banner">
+                    <div class="info-banner-icon"><i data-lucide="microscope" style="width:32px;height:32px;color:var(--primary-green);"></i></div>
+                    <div>
+                        <h3>Disease & Diagnostic Rules Database</h3>
+                        <p>This section manages the diseases and diagnostic rules used by the AI diagnosis engine.
+                            {% if diseases %}Showing <strong>{{ diseases|length }}</strong> disease records from the
+                            database.{% else %}
+                            No <code>diseases</code> table found yet — create it to enable full disease management.{%
+                            endif %}</p>
+                    </div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="filter-bar" style="margin-top:1.5rem;">
+                    <form method="GET" class="filter-form">
+                        <div class="filter-group">
+                            <input type="text" name="search" value="{{ search }}"
+                                placeholder="Search diseases or affected crops..." class="filter-input"
+                                style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-md);font-family:var(--font-family);">
+                        </div>
+                        <button type="submit" class="btn-action-pill">Search</button>
+                        {% if search %}<a href="{{ url_for('admin_diseases') }}"
+                            class="btn-action-pill ghost">Clear</a>{% endif %}
+                    </form>
+                </div>
+
+                <div class="data-table-container" style="margin-top:1rem;">
+                    {% if diseases %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Disease Name</th>
+                                <th>Scientific Name</th>
+                                <th>Category</th>
+                                <th>Severity</th>
+                                <th>Affected Crops</th>
+                                <th>Treatments</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in diseases %}
+                            <tr>
+                                <td><span style="color:var(--text-light)">#{{ loop.index }}</span></td>
+                                <td><strong>{{ d.name }}</strong></td>
+                                <td style="font-style:italic;color:var(--text-light);">{{ d.scientific_name or '—' }}
+                                </td>
+                                <td>
+                                    <span
+                                        style="padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;
+                                        background:{% if d.category=='fungal' %}#e8f4f0{% elif d.category=='bacterial' %}#eff6ff{% elif d.category=='viral' %}#fef3c7{% elif d.category=='pest' %}#fce7f3{% elif d.category=='nutritional' %}#f0fdf4{% else %}#f8fafc{% endif %};
+                                        color:{% if d.category=='fungal' %}#065f46{% elif d.category=='bacterial' %}#1e40af{% elif d.category=='viral' %}#92400e{% elif d.category=='pest' %}#9d174d{% elif d.category=='nutritional' %}#15803d{% else %}#475569{% endif %}">
+                                        {{ d.category | title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span
+                                        style="padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;
+                                        background:{% if d.severity=='critical' %}#fce7f3{% elif d.severity=='high' %}#fee2e2{% elif d.severity=='medium' %}#fef3c7{% else %}#d1fae5{% endif %};
+                                        color:{% if d.severity=='critical' %}#9d174d{% elif d.severity=='high' %}#991b1b{% elif d.severity=='medium' %}#92400e{% else %}#065f46{% endif %}">
+                                        {{ d.severity | upper }}
+                                    </span>
+                                </td>
+                                <td style="font-size:0.8rem;color:var(--text-medium);">{{ d.affected_crops or '—' }}
+                                </td>
+                                <td style="text-align:center;">{{ d.treatment_count or 0 }}</td>
+                                <td style="font-size:0.78rem;color:var(--text-medium);max-width:220px;">
+                                    {{ (d.description or '')[:80] }}{% if (d.description or '') | length > 80 %}…{%
+                                    endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <div style="padding:0.75rem 1rem;font-size:var(--font-size-sm);color:var(--text-light);">Showing {{
+                        total }} diseases</div>
+                    {% else %}
+                    <div class="empty-state">
+                        <div style="margin-bottom:1rem;color:var(--text-light);"><i data-lucide="biohazard" style="width:48px;height:48px;"></i></div>
+                        <h3>No Disease Records Found</h3>
+                        <p>{% if search %}No diseases match "<strong>{{ search }}</strong>".{% else %}The diseases table
+                            is empty. Add disease records to get started.{% endif %}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .info-banner {
+            display: flex;
+            gap: 1.25rem;
+            align-items: flex-start;
+            background: linear-gradient(135deg, #e8f4f0, #f0f9f4);
+            border: 1px solid rgba(74, 155, 127, 0.3);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem 1.5rem;
+        }
+
+        .info-banner-icon {
+            font-size: 2rem;
+            flex-shrink: 0;
+        }
+
+        .info-banner h3 {
+            margin: 0 0 0.25rem;
+            color: var(--primary-green);
+        }
+
+        .info-banner p {
+            margin: 0;
+            color: var(--text-medium);
+            font-size: var(--font-size-sm);
+            line-height: 1.6;
+        }
+
+        .filter-bar {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 1rem 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .filter-form {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .btn-action-pill {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            border: none;
+            background: var(--primary-green);
+            color: white;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .btn-action-pill.ghost {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-medium);
+        }
+
+        .data-table-container {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: var(--bg-light);
+            padding: 0.875rem 1rem;
+            text-align: left;
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--text-medium);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+            font-size: var(--font-size-sm);
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--bg-light);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .code-hint {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            text-align: left;
+            display: inline-block;
+            margin-top: 0.5rem;
+        }
+
+        .code-hint pre {
+            margin: 0;
+            font-size: 0.78rem;
+            line-height: 1.7;
+        }
+    </style>
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+    </script>
+</body>
+
+</html>

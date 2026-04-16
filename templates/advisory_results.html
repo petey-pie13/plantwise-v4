@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recommendations Results - PlantWise</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/advisory_enhanced.css') }}">
+    <style>
+        .result-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .secondary-info {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .suitability-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: var(--primary-green);
+            color: white;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.8em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Crop Advisory Results</p>
+                </div>
+            </div>
+            <a href="/" class="admin-btn">Home</a>
+        </div>
+    </header>
+
+    <main class="container section">
+        <div id="results-loading" class="text-center">
+            <div class="loading-spinner" style="width: 40px; height: 40px;"></div>
+            <p>Processing your recommendations...</p>
+        </div>
+
+        <div id="results-content" class="hidden">
+            <div class="features-header">
+                <h2>Your Tailored Recommendations</h2>
+                <p id="results-summary-text"></p>
+            </div>
+
+            <div class="grid" id="recommendations-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px;">
+                <!-- Result Cards Filled by JS -->
+            </div>
+
+            <div class="nav-buttons">
+                <a href="/advisory" class="btn btn-outline">Start New Assessment</a>
+                <button onclick="window.print()" class="btn btn-primary">Download Report (PDF)</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const data = JSON.parse(sessionStorage.getItem('advisory_results'));
+            if (!data || !data.success) {
+                document.getElementById('results-loading').innerHTML = `
+                    <div class="location-banner error">
+                        No results found. Please complete the advisory form again.
+                        <a href="/advisory" style="margin-left: 20px; color: inherit; text-decoration: underline;">Go Back</a>
+                    </div>
+                `;
+                return;
+            }
+
+            displayResults(data);
+        });
+
+        function displayResults(data) {
+            document.getElementById('results-loading').classList.add('hidden');
+            document.getElementById('results-content').classList.remove('hidden');
+
+            const container = document.getElementById('recommendations-container');
+            const summary   = document.getElementById('results-summary-text');
+
+            summary.textContent = `Based on your soil pH of ${data.ph_used} (${data.ph_fuzzy.label}) and local weather conditions, we recommend these crops for high yield.`;
+
+            if (data.recommendations.length === 0) {
+                container.innerHTML = '<p class="text-center">No specific matches found. Try adjusting your inputs or consult a local office.</p>';
+                return;
+            }
+
+            container.innerHTML = data.recommendations.map((rec, index) => {
+                // Rank specific classes
+                let rankClass = `rank-${rec.rank}`;
+                
+                // Image handling
+                const imageHtml = rec.crop_image_url 
+                    ? `<img src="${rec.crop_image_url}" alt="${rec.name}" class="crop-card-image" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=crop-card-image-placeholder>🌱</div>';">`
+                    : `<div class="crop-card-image-placeholder">🌱</div>`;
+
+                const growingNotesHtml = rec.growing_notes 
+                    ? `<div class="county-notes"><strong>Local Tip:</strong> ${rec.growing_notes}</div>` 
+                    : '';
+
+                return `
+                    <div class="results-card fade-in" style="animation-delay: ${index * 0.1}s">
+                        <div class="crop-card-image-wrapper">
+                            ${imageHtml}
+                            <div class="crop-rank-badge ${rankClass}">#${rec.rank}</div>
+                            <div class="crop-score-badge">${rec.suitability_score}% Match</div>
+                        </div>
+
+                        <div class="results-card-body">
+                            <div class="crop-header">
+                                <h3 class="crop-name">${rec.name}</h3>
+                                <p class="crop-scientific"><em>${rec.scientific_name || ''}</em></p>
+                            </div>
+
+                            <p class="crop-description">${rec.description}</p>
+
+                            <div class="suitability-section">
+                                <div class="suitability-label-row">
+                                    <span>Suitability Score</span>
+                                    <span>${rec.suitability_score}%</span>
+                                </div>
+                                <div class="suitability-bar-track">
+                                    <div class="suitability-bar-fill" data-width="${rec.suitability_score}%"></div>
+                                </div>
+                            </div>
+
+                            <div class="crop-tech-grid">
+                                <div class="tech-item">
+                                    <span class="tech-label">Season</span>
+                                    <span class="tech-value">${rec.season}</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Est. Days</span>
+                                    <span class="tech-value">${rec.growth_period}</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Yield</span>
+                                    <span class="tech-value">${rec.yield_potential}</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">pH Range</span>
+                                    <span class="tech-value">${rec.ph_range}</span>
+                                </div>
+                            </div>
+
+                            <div class="notes-section">
+                                ${growingNotesHtml}
+                                <div class="condition-feedback">${rec.notes}</div>
+                            </div>
+
+                            <div class="card-actions">
+                                <button class="btn btn-outline">Market Prices</button>
+                                <button class="btn btn-primary">Planting Guide</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Trigger suitability bar animation after a short delay
+            setTimeout(() => {
+                document.querySelectorAll('.suitability-bar-fill').forEach(bar => {
+                    bar.style.width = bar.getAttribute('data-width');
+                });
+            }, 300);
+        }
+    </script>
+</body>
+</html>

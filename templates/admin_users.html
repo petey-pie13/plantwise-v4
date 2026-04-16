@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item"><span class="nav-icon"><i data-lucide="message-square"></i></span><span>Feedback</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;">
+                    <span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">User Management</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category=='success'%}✓{% elif category=='error'%}✕{% else %}ℹ{% endif
+                        %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <div class="content-header">
+                    <div>
+                        <h2>Admin Users <span class="badge-count">{{ users|length }}</span></h2>
+                        <p>Manage who has access to the PlantWise admin panel.</p>
+                    </div>
+                    <a href="{{ url_for('admin_user_add') }}" class="cta-btn">+ Add User</a>
+                </div>
+
+                <div class="data-table-container">
+                    {% if users %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Last Login</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td><span class="muted">#{{ user.id }}</span></td>
+                                <td>
+                                    <div class="user-cell">
+                                        <div class="user-avatar-sm">{{ user.username[0].upper() }}</div>
+                                        <strong>{{ user.username }}
+                                            {% if user.id == current_user_id %}<span class="you-badge">YOU</span>{%
+                                            endif %}
+                                        </strong>
+                                    </div>
+                                </td>
+                                <td>{{ user.email }}</td>
+                                <td><span class="role-badge role-{{ user.role }}">{{ user.role }}</span></td>
+                                <td>
+                                    {% if user.is_active %}
+                                    <span class="status-dot active">● Active</span>
+                                    {% else %}
+                                    <span class="status-dot inactive">● Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="muted">{{ user.last_login.strftime('%d %b %Y %H:%M') if user.last_login else
+                                    'Never' }}</td>
+                                <td class="muted">{{ user.created_at.strftime('%d %b %Y') if user.created_at else '—' }}
+                                </td>
+                                <td>
+                                    <div class="row-actions">
+                                        <a href="{{ url_for('admin_user_edit', user_id=user.id) }}"
+                                            class="action-link"><i data-lucide="pencil" style="width:12px;height:12px;"></i> Edit</a>
+                                        {% if user.id != current_user_id %}
+                                        <form method="POST" action="{{ url_for('admin_user_toggle', user_id=user.id) }}"
+                                            onsubmit="return confirm('{{ 'Deactivate' if user.is_active else 'Activate' }} {{ user.username }}?');"
+                                            style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit"
+                                                class="action-link {% if user.is_active %}danger{% else %}success{% endif %}">
+                                                {% if user.is_active %}Deactivate{% else %}Activate{% endif %}
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">
+                        <div style="margin-bottom:1rem;color:var(--text-light);"><i data-lucide="users" style="width:48px;height:48px;"></i></div>
+                        <h3>No users found</h3>
+                        <a href="{{ url_for('admin_user_add') }}" class="cta-btn">Add First User</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .content-header p {
+            color: var(--text-light);
+            margin: 0.25rem 0 0;
+            font-size: var(--font-size-sm);
+        }
+
+        .badge-count {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: var(--radius-full);
+            background: #e8f4f0;
+            color: var(--primary-green);
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.5rem 1.25rem;
+            background: var(--primary-green);
+            color: white;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: var(--font-size-sm);
+            transition: all var(--transition-fast);
+        }
+
+        .cta-btn:hover {
+            background: var(--primary-green-dark);
+        }
+
+        .data-table-container {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: var(--bg-light);
+            padding: 0.875rem 1rem;
+            text-align: left;
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--text-medium);
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        .data-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+            vertical-align: middle;
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--bg-light);
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .user-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .user-avatar-sm {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-green), var(--accent-green));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .you-badge {
+            display: inline-block;
+            margin-left: 0.3rem;
+            padding: 0.1rem 0.4rem;
+            background: #e8f4f0;
+            color: var(--primary-green);
+            border-radius: var(--radius-full);
+            font-size: 0.65rem;
+            font-weight: 700;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: var(--radius-full);
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        .role-superadmin {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .role-admin {
+            background: #e8f4f0;
+            color: var(--primary-green);
+        }
+
+        .role-viewer {
+            background: #f1f5f9;
+            color: var(--text-medium);
+        }
+
+        .status-dot {
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .status-dot.active {
+            color: #2d8a5e;
+        }
+
+        .status-dot.inactive {
+            color: #94a3b8;
+        }
+
+        .muted {
+            color: var(--text-light);
+            font-size: var(--font-size-sm);
+        }
+
+        .row-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .action-link {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.78rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            color: var(--text-medium);
+            font-family: var(--font-family);
+            transition: background var(--transition-fast);
+        }
+
+        .action-link:hover {
+            background: var(--bg-light);
+        }
+
+        .action-link.danger {
+            color: #dc2626;
+        }
+
+        .action-link.danger:hover {
+            background: #fee2e2;
+        }
+
+        .action-link.success {
+            color: #2d8a5e;
+        }
+
+        .action-link.success:hover {
+            background: #e8f4f0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+    </style>
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Management - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+
+    <!-- Sidebar -->
+    <div class="admin-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <span class="logo-icon"><i data-lucide="leaf"></i></span>
+                    <span class="logo-text">PlantWise</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item"><span class="nav-icon"><i data-lucide="message-square"></i></span><span>Feedback</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item logout-btn">
+                    <span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Top Bar -->
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">Crop Management</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <span class="profile-avatar"><i data-lucide="user" style="width:18px;height:18px;"></i></span>
+                        <div>
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" id="flash-msg">
+                    <span class="alert-icon">{% if category == 'success' %}✓{% elif category == 'error' %}✕{% else %}ℹ{%
+                        endif %}</span>
+                    <span>{{ message }}</span>
+                    <button onclick="this.parentElement.remove()"
+                        style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <!-- Page Header Row -->
+                <div class="content-header">
+                    <div>
+                        <h2>All Crops <span class="badge badge-primary">{{ total }}</span></h2>
+                        <p style="color:var(--text-light);margin:0;">Manage the crop database — add, edit, or remove
+                            entries.</p>
+                    </div>
+                    <a href="{{ url_for('admin_crop_add') }}" class="btn-admin btn-admin-primary">
+                        <span>+</span> Add Crop
+                    </a>
+                </div>
+
+                <!-- Filters -->
+                <div class="filter-bar">
+                    <form method="GET" action="{{ url_for('admin_crops') }}" class="filter-form">
+                        <div class="filter-group">
+                            <input type="text" name="search" value="{{ search }}"
+                                placeholder="Search by name or scientific name..." class="filter-input">
+                        </div>
+                        <div class="filter-group">
+                            <select name="season" class="filter-select">
+                                <option value="">All Seasons</option>
+                                {% for s in seasons %}
+                                <option value="{{ s }}" {% if season_filter==s %}selected{% endif %}>{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-admin btn-admin-secondary">Filter</button>
+                        {% if search or season_filter %}
+                        <a href="{{ url_for('admin_crops') }}" class="btn-admin btn-admin-ghost">Clear</a>
+                        {% endif %}
+                    </form>
+                </div>
+
+                <!-- Crops Table -->
+                <div class="data-table-container">
+                    {% if crops %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Crop Name</th>
+                                <th>Scientific Name</th>
+                                <th>Season</th>
+                                <th>Growth Period</th>
+                                <th>Yield Potential</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for crop in crops %}
+                            <tr>
+                                <td><span class="text-muted">#{{ crop.crop_id }}</span></td>
+                                <td>
+                                    <div class="crop-name-cell">
+                                        {% if crop.crop_image_url %}
+                                        <img src="{{ crop.crop_image_url }}" alt="{{ crop.crop_name }}"
+                                            class="crop-thumb" onerror="this.src='https://via.placeholder.com/40'">
+                                        {% else %}
+                                        <div class="crop-thumb-placeholder"><i data-lucide="wheat" style="color:var(--primary-green);width:20px;height:20px;"></i></div>
+                                        {% endif %}
+                                        <div>
+                                            <strong>{{ crop.crop_name }}</strong>
+                                            {% if crop.description %}
+                                            <div class="crop-desc">{{ crop.description[:60] }}{% if
+                                                crop.description|length > 60 %}…{% endif %}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><em class="text-muted">{{ crop.scientific_name or '—' }}</em></td>
+                                <td>
+                                    {% if crop.season %}
+                                    <span class="badge badge-success">{{ crop.season }}</span>
+                                    {% else %}
+                                    <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ crop.growth_period_days ~ ' days' if crop.growth_period_days else '—' }}</td>
+                                <td>{{ crop.yield_potential or '—' }}</td>
+                                <td>
+                                    <div class="action-btns">
+                                        <a href="{{ url_for('admin_crop_edit', crop_id=crop.crop_id) }}"
+                                            class="btn-action btn-edit" title="Edit"><i data-lucide="pencil" style="width:15px;height:15px;"></i></a>
+                                        <form method="POST"
+                                            action="{{ url_for('admin_crop_delete', crop_id=crop.crop_id) }}"
+                                            onsubmit="return confirm('Delete {{ crop.crop_name }}? This cannot be undone.');"
+                                            style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn-action btn-delete"
+                                                title="Delete"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <div class="pagination">
+                        <span class="page-info">Page {{ page }} of {{ total_pages }} ({{ total }} crops)</span>
+                        <div class="page-btns">
+                            {% if page > 1 %}
+                            <a href="{{ url_for('admin_crops', page=page-1, search=search, season=season_filter) }}"
+                                class="page-btn">← Prev</a>
+                            {% endif %}
+                            {% for p in range(1, total_pages + 1) %}
+                            <a href="{{ url_for('admin_crops', page=p, search=search, season=season_filter) }}"
+                                class="page-btn {% if p == page %}active{% endif %}">{{ p }}</a>
+                            {% endfor %}
+                            {% if page < total_pages %} <a
+                                href="{{ url_for('admin_crops', page=page+1, search=search, season=season_filter) }}"
+                                class="page-btn">Next →</a>
+                                {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon" style="color:var(--text-light);"><i data-lucide="wheat" style="width:48px;height:48px;"></i></div>
+                        <h3>No crops found</h3>
+                        <p>{% if search or season_filter %}No crops match your search criteria.{% else %}The crop
+                            database is empty.{% endif %}</p>
+                        <a href="{{ url_for('admin_crop_add') }}" class="btn-admin btn-admin-primary">Add First Crop</a>
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .filter-bar {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .filter-form {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .filter-input,
+        .filter-select {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            background: var(--bg-light);
+        }
+
+        .data-table-container {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            background: var(--bg-light);
+            color: var(--text-medium);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+            padding: 0.875rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        .data-table td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+            vertical-align: middle;
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--bg-light);
+        }
+
+        .data-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .crop-name-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .crop-thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            object-fit: cover;
+            border: 1px solid var(--border-color);
+        }
+
+        .crop-thumb-placeholder {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            background: var(--bg-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .crop-desc {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 0.1rem;
+        }
+
+        .text-muted {
+            color: var(--text-light);
+            font-size: var(--font-size-sm);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: var(--radius-full);
+            font-size: 0.72rem;
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .badge-primary {
+            background: #e8f4f0;
+            color: var(--primary-green);
+        }
+
+        .badge-success {
+            background: #e8f8f0;
+            color: #2d8a5e;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .btn-action {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 0.3rem 0.5rem;
+            border-radius: var(--radius-sm);
+            transition: background var(--transition-fast);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .btn-edit:hover {
+            background: #e8f4f0;
+        }
+
+        .btn-delete:hover {
+            background: #fee2e2;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .page-info {
+            font-size: var(--font-size-sm);
+            color: var(--text-medium);
+        }
+
+        .page-btns {
+            display: flex;
+            gap: 0.35rem;
+        }
+
+        .page-btn {
+            padding: 0.35rem 0.65rem;
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-sm);
+            text-decoration: none;
+            color: var(--text-medium);
+            border: 1px solid var(--border-color);
+            transition: all var(--transition-fast);
+        }
+
+        .page-btn.active,
+        .page-btn:hover {
+            background: var(--primary-green);
+            color: white;
+            border-color: var(--primary-green);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state h3 {
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-admin {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1.25rem;
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            transition: all var(--transition-fast);
+        }
+
+        .btn-admin-primary {
+            background: var(--primary-green);
+            color: white;
+        }
+
+        .btn-admin-primary:hover {
+            background: var(--primary-green-dark);
+        }
+
+        .btn-admin-secondary {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .btn-admin-secondary:hover {
+            background: var(--primary-green-light);
+        }
+
+        .btn-admin-ghost {
+            background: transparent;
+            color: var(--text-medium);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-admin-ghost:hover {
+            background: var(--bg-light);
+        }
+    </style>
+
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+        // Auto-dismiss flash after 4s
+        setTimeout(() => {
+            const msg = document.getElementById('flash-msg');
+            if (msg) msg.remove();
+        }, 4000);
+    </script>
+</body>
+
+</html>

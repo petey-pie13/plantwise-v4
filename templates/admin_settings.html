@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item"><span class="nav-icon"><i data-lucide="message-square"></i></span><span>Feedback</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;"><span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span></a>
+            </div>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">System Settings</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category=='success'%}✓{% elif category=='error'%}✕{% else %}ℹ{% endif
+                        %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <div style="max-width:840px;">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <!-- Application Settings -->
+                        <div class="settings-section">
+                            <div class="settings-section-title"><i data-lucide="settings" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px;"></i>Application Settings</div>
+                            <p class="settings-section-desc">Core application configuration stored in the database.</p>
+
+                            {% if settings %}
+                            {% for key, meta in settings.items() %}
+                            <div class="settings-row">
+                                <div class="settings-label">
+                                    <strong>{{ key.replace('_',' ').title() }}</strong>
+                                    {% if meta.description %}<div class="settings-hint">{{ meta.description }}</div>{%
+                                    endif %}
+                                </div>
+                                <div class="settings-input">
+                                    <input type="text" name="{{ key }}" value="{{ meta.value or '' }}" class="si"
+                                        placeholder="Enter value…">
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <!-- Default / seed settings shown as editable fields -->
+                            {% set defaults = [
+                            ('app_name', 'PlantWise', 'Application name shown to users'),
+                            ('max_crops_per_page', '20', 'Number of crops per page in admin table'),
+                            ('session_timeout_min', '60', 'Admin session timeout in minutes'),
+                            ('maintenance_mode', '0', 'Set to 1 to enable maintenance mode (blocks public access)')
+                            ] %}
+                            {% for key, default_val, hint in defaults %}
+                            <div class="settings-row">
+                                <div class="settings-label">
+                                    <strong>{{ key.replace('_',' ').title() }}</strong>
+                                    <div class="settings-hint">{{ hint }}</div>
+                                </div>
+                                <div class="settings-input">
+                                    <input type="text" name="{{ key }}" value="{{ default_val }}" class="si"
+                                        placeholder="Enter value…">
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Read-only Info -->
+                        <div class="settings-section readonly-section">
+                            <div class="settings-section-title"><i data-lucide="info" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px;"></i>System Information</div>
+                            <div class="info-grid">
+                                <div class="info-item"><span class="info-key">Python</span><span
+                                        class="info-val mono">{{ "3.x (Flask)" }}</span></div>
+                                <div class="info-item"><span class="info-key">Database</span><span
+                                        class="info-val mono">MySQL (crop_advisory)</span></div>
+                                <div class="info-item"><span class="info-key">Admin Panel Version</span><span
+                                        class="info-val mono">1.0.0</span></div>
+                                <div class="info-item"><span class="info-key">Session Key</span><span
+                                        class="info-val mono">set in app.py config</span></div>
+                            </div>
+                        </div>
+
+                        <div class="settings-footer">
+                            <button type="submit" class="save-btn"><i data-lucide="save" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"></i>Save Settings</button>
+                            <span class="settings-note">These values are saved to the <code>system_settings</code>
+                                table.</span>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .settings-section {
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .settings-section-title {
+            padding: 1.25rem 1.5rem 0.5rem;
+            font-weight: 700;
+            font-size: var(--font-size-base);
+            color: var(--text-dark);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .settings-section-desc {
+            padding: 0.75rem 1.5rem 0;
+            font-size: var(--font-size-sm);
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+        }
+
+        .settings-row:last-child {
+            border-bottom: none;
+        }
+
+        .settings-label strong {
+            font-size: var(--font-size-sm);
+            color: var(--text-dark);
+        }
+
+        .settings-hint {
+            font-size: 0.72rem;
+            color: var(--text-light);
+            margin-top: 0.2rem;
+        }
+
+        .si {
+            width: 100%;
+            padding: 0.55rem 0.8rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            box-sizing: border-box;
+        }
+
+        .si:focus {
+            outline: none;
+            border-color: var(--accent-green);
+            box-shadow: 0 0 0 3px rgba(95, 184, 140, 0.12);
+        }
+
+        .readonly-section {
+            background: #f8fafc;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem 1.5rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .info-key {
+            font-size: 0.72rem;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .info-val {
+            font-size: var(--font-size-sm);
+            color: var(--text-dark);
+        }
+
+        .mono {
+            font-family: monospace;
+        }
+
+        .settings-footer {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            padding: 0.5rem 0 1.5rem;
+        }
+
+        .save-btn {
+            padding: 0.6rem 1.5rem;
+            background: var(--primary-green);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .save-btn:hover {
+            background: var(--primary-green-dark);
+        }
+
+        .settings-note {
+            font-size: 0.75rem;
+            color: var(--text-light);
+        }
+
+        @media(max-width:640px) {
+            .settings-row {
+                grid-template-columns: 1fr;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+    </script>
+</body>
+
+</html>

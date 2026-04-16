@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disease Diagnosis - PlantWise</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Crop Advisory & Diagnostics System</p>
+                </div>
+            </div>
+            <button class="admin-btn" onclick="window.location.href='/admin'">
+                <span>Admin Panel</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Back Link -->
+    <a href="/" class="back-link">
+        <span>←</span>
+        <span>Back to Home</span>
+    </a>
+
+    <!-- Diagnosis Options Section -->
+    <div class="container" style="padding: var(--spacing-2xl) var(--spacing-xl);">
+        <div style="text-align: center; margin-bottom: var(--spacing-3xl);">
+            <h1>Disease Diagnosis</h1>
+            <p style="color: var(--text-medium); font-size: var(--font-size-lg);">
+                Upload plant photos for AI-powered disease identification, enhanced with our local knowledge base
+            </p>
+        </div>
+
+        <div class="diagnosis-options" style="max-width: 600px; margin: 0 auto;">
+            <!-- Hybrid AI Analysis -->
+            <div class="diagnosis-option" onclick="selectDiagnosisMethod('hybrid')">
+                <span class="option-badge recommended">Recommended</span>
+                <div class="diagnosis-option-icon light">
+                </div>
+                <h3>Hybrid AI Analysis</h3>
+                <p>Upload plant photos for confident disease identification. Our diagnosis engine fuses AI visual analysis with local East African knowledge base data for maximum accuracy and practical treatment guidance.</p>
+            </div>
+        </div>
+
+        <!-- Hidden Form Container -->
+        <div id="diagnosis-form-container" class="hidden">
+            <form id="diagnosis-form" enctype="multipart/form-data">
+                <!-- Crop Selection (Always Shown) -->
+                <div class="step-card">
+                    <h3 class="form-label">Select Crop</h3>
+                    <select class="form-select" id="crop-select" name="crop" required>
+                        <option value="">Choose a crop...</option>
+                        {% if crops %}
+                        {% for crop in crops %}
+                        <option value="{{ crop }}">{{ crop }}</option>
+                        {% endfor %}
+                        {% else %}
+                        <option value="Coffee">Coffee</option>
+                        <option value="Maize">Maize</option>
+                        <option value="Beans">Beans</option>
+                        <option value="Tomatoes">Tomatoes</option>
+                        <option value="Potatoes">Potatoes</option>
+                        <option value="Tea">Tea</option>
+                        <option value="Wheat">Wheat</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <!-- Image Upload Section (for image and hybrid methods) -->
+                <div class="step-card hidden" id="image-upload-section">
+                    <div style="position: relative;">
+                        <h3 class="form-label">Upload Plant Images</h3>
+                        <span class="upload-count" id="image-count">0/3 images</span>
+                    </div>
+
+                    <div style="background-color: var(--bg-color); border-radius: var(--border-radius-md); padding: var(--spacing-md); margin-bottom: var(--spacing-md); border-left: 4px solid var(--accent-blue);">
+                        <h4 style="margin-top: 0; margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: var(--spacing-xs);">
+                            <span></span> Photo Guidelines for Best Results
+                        </h4>
+                        <ul style="margin: 0; padding-left: var(--spacing-lg); color: var(--text-medium); font-size: var(--font-size-sm); line-height: 1.5;">
+                            <li><strong>Get Close:</strong> Ensure the affected leaf, stem, or fruit fills most of the frame.</li>
+                            <li><strong>Natural Light:</strong> Take photos outdoors during daylight. Avoid using flash.</li>
+                            <li><strong>Avoid Shadows:</strong> Position yourself so your shadow doesn't fall on the plant.</li>
+                            <li><strong>Stay Sharp:</strong> Tap your screen to focus. Blurry photos cannot be diagnosed.</li>
+                        </ul>
+                    </div>
+
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-icon"></div>
+                        <h3>Drag and drop images here, or click to select</h3>
+                        <p>JPG, PNG up to 5MB each (max 3 images)</p>
+                        <input type="file" id="image-input" accept="image/jpeg,image/png" multiple
+                            style="display: none;">
+                        <button type="button" class="btn btn-success"
+                            onclick="document.getElementById('image-input').click()">
+                            <span>Choose Files</span>
+                        </button>
+                    </div>
+
+                    <!-- Image Preview Grid -->
+                    <div id="image-preview-grid"
+                        style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-md); margin-top: var(--spacing-lg);">
+                    </div>
+
+                    <!-- Upload Progress Bar -->
+                    <div id="upload-progress" class="hidden" style="margin-top: var(--spacing-lg);">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="upload-progress-bar" style="width: 0%;"></div>
+                        </div>
+                        <p class="text-center" style="margin-top: var(--spacing-sm); color: var(--text-medium);">
+                            Uploading images...</p>
+                    </div>
+                </div>
+
+                <!-- Symptom Selection Section (for symptom and hybrid methods) -->
+                <div class="step-card hidden" id="symptom-selection-section">
+                    <h3 class="form-label">Affected Plant Part</h3>
+                    <div class="selection-grid" style="margin-bottom: var(--spacing-xl);">
+                        <div class="selection-card" data-value="Leaf" onclick="selectPlantPart(this)">
+                            <h4>Leaf</h4>
+                        </div>
+                        <div class="selection-card" data-value="Stem" onclick="selectPlantPart(this)">
+                            <h4>Stem</h4>
+                        </div>
+                        <div class="selection-card" data-value="Root" onclick="selectPlantPart(this)">
+                            <h4>Root</h4>
+                        </div>
+                        <div class="selection-card" data-value="Fruit" onclick="selectPlantPart(this)">
+                            <h4>Fruit</h4>
+                        </div>
+                    </div>
+                    <input type="hidden" id="plant-part" name="plant_part">
+
+                    <h3 class="form-label">Select Symptoms</h3>
+                    <div id="symptoms-container">
+                        <!-- Sample symptoms - these would be dynamically loaded based on crop and plant part -->
+                        <div class="card" style="margin-bottom: var(--spacing-md); padding: var(--spacing-md);">
+                            <label style="display: flex; align-items: center; gap: var(--spacing-md); cursor: pointer;">
+                                <input type="checkbox" name="symptoms[]" value="yellow_spots"
+                                    style="width: 20px; height: 20px;">
+                                <div>
+                                    <strong>Yellow spots on leaves</strong>
+                                    <p style="font-size: var(--font-size-sm); color: var(--text-medium); margin: 0;">
+                                        Leaf</p>
+                                </div>
+                            </label>
+                            <div style="margin-top: var(--spacing-md);">
+                                <label style="font-size: var(--font-size-sm); color: var(--text-medium);">Confidence
+                                    Level:</label>
+                                <input type="range" class="range-slider" min="0" max="100" value="50"
+                                    style="margin-top: var(--spacing-sm);">
+                                <p
+                                    style="text-align: right; font-size: var(--font-size-sm); margin: var(--spacing-xs) 0 0 0;">
+                                    50%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="nav-buttons" style="margin-top: var(--spacing-2xl);">
+                    <button type="button" class="btn btn-outline" onclick="window.location.href='/diagnosis'">
+                        Back
+                    </button>
+                    <button type="button" class="btn btn-success" id="diagnose-btn" onclick="submitDiagnosis()">
+                        Start Diagnosis
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="hidden" style="text-align: center; padding: var(--spacing-3xl);">
+            <div class="loading-spinner" style="margin-bottom: var(--spacing-md);"></div>
+            <p class="loading-text" style="font-size: var(--font-size-xl); margin-bottom: var(--spacing-sm);">
+                Kindly wait as we diagnose your crop! 
+                <span id="loading-percentage" style="font-weight: bold; color: var(--primary-green);">0%</span>
+            </p>
+            <div style="width: 100%; max-width: 400px; margin: 0 auto; height: 10px; background: var(--border-color); border-radius: 5px; overflow: hidden; margin-bottom: var(--spacing-md);">
+                <div id="loading-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--success-green, #10b981), var(--primary-green, #059669)); transition: width 0.3s ease;"></div>
+            </div>
+            <p style="color: var(--text-medium);">This may take a few moments</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/diagnosis.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/imageUpload.js') }}"></script>
+</body>
+
+</html>

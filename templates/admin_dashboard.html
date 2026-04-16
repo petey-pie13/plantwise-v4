@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item active">
+                    <span class="nav-icon"><i data-lucide="layout-dashboard"></i></span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item">
+                    <span class="nav-icon"><i data-lucide="wheat"></i></span>
+                    <span>Crops</span>
+                </a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item">
+                    <span class="nav-icon"><i data-lucide="microscope"></i></span>
+                    <span>Diseases</span>
+                </a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item">
+                    <span class="nav-icon"><i data-lucide="users"></i></span>
+                    <span>Users</span>
+                </a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item">
+                    <span class="nav-icon"><i data-lucide="bar-chart-3"></i></span>
+                    <span>Analytics</span>
+                </a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item">
+                    <span class="nav-icon"><i data-lucide="message-square"></i></span>
+                    <span>Feedback</span>
+                </a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item">
+                    <span class="nav-icon"><i data-lucide="settings"></i></span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;">
+                    <span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main" id="mainContent">
+            <!-- Top Navigation -->
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <h1 class="page-title">Dashboard</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <div class="admin-content">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="margin-bottom: var(--spacing-xl);">
+                    <span class="alert-icon">
+                        {% if category == 'success' %}✓{% elif category == 'error' %}✕{% else %}ℹ{% endif %}
+                    </span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <!-- Key Metrics -->
+                <div class="metrics-grid">
+                    <!-- Total Diagnoses -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <h3 class="metric-title">Total Diagnoses</h3>
+                            <span class="metric-icon"><i data-lucide="clipboard-list"></i></span>
+                        </div>
+                        <div class="metric-value">{{ stats.total_diagnoses }}</div>
+                        <div class="metric-trend trend-up">
+                            <span>↑</span>
+                            <span>{{ stats.diagnoses_trend }}</span>
+                        </div>
+                        <!-- Per-method breakdown -->
+                        <div class="method-breakdown">
+                            {% set method_icons = {
+                            'knowledge_base': ('book-open', 'Knowledge Base'),
+                            'image_analysis': ('cpu', 'AI Image Analysis'),
+                            'hybrid': ('git-merge', 'Hybrid')
+                            } %}
+                            {% for method, cnt in stats.diagnoses_by_method.items() %}
+                            <div class="method-row">
+                                <span class="method-icon"><i data-lucide="{{ method_icons.get(method, ('microscope', method))[0] }}"></i></span>
+                                <span class="method-name">{{ method_icons.get(method, ('microscope', method))[1] }}</span>
+                                <span class="method-count">{{ cnt }}</span>
+                            </div>
+                            {% else %}
+                            <div class="method-row muted">No diagnoses recorded yet.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Advisory Sessions -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <h3 class="metric-title">Advisory Sessions</h3>
+                            <span class="metric-icon"><i data-lucide="sprout"></i></span>
+                        </div>
+                        <div class="metric-value">{{ stats.advisory_count }}</div>
+                        <div class="metric-footer">Total crop advisory requests</div>
+                    </div>
+
+                    <!-- Crops in Database -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <h3 class="metric-title">Crops in Database</h3>
+                            <span class="metric-icon"><i data-lucide="wheat"></i></span>
+                        </div>
+                        <div class="metric-value">{{ stats.crops_count }}</div>
+                        <div class="metric-footer">
+                            <a href="{{ url_for('admin_crops') }}" style="color: var(--primary-green);">View all crops
+                                →</a>
+                        </div>
+                    </div>
+
+                    <!-- System Uptime -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <h3 class="metric-title">System Uptime</h3>
+                            <span class="metric-icon"><i data-lucide="zap"></i></span>
+                        </div>
+                        <div class="metric-value">{{ stats.system_uptime }}</div>
+                        <div class="metric-footer">
+                            <span style="color: var(--success-green);">● </span>
+                            Last 30 days
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity & Quick Actions Row -->
+                <div
+                    style="display: grid; grid-template-columns: 2fr 1fr; gap: var(--spacing-xl); margin-bottom: var(--spacing-xl);">
+                    <!-- Recent Activity -->
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h2 class="section-title">Recent Activity</h2>
+                            <a href="#" style="font-size: var(--font-size-sm); color: var(--primary-green);">View all
+                                →</a>
+                        </div>
+                        <ul class="activity-list">
+                            {% for activity in recent_activity %}
+                            <li class="activity-item">
+                                <div class="activity-icon {{ activity.type }}">
+                                    {% if activity.type == 'diagnosis' %}<i data-lucide="clipboard-list"></i>
+                                    {% elif activity.type == 'crop' %}<i data-lucide="wheat"></i>
+                                    {% elif activity.type == 'user' %}<i data-lucide="user"></i>
+                                    {% elif activity.type == 'rule' %}<i data-lucide="file-edit"></i>
+                                    {% elif activity.type == 'api' %}<i data-lucide="plug"></i>
+                                    {% else %}<i data-lucide="activity"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-user">{{ activity.user }}</div>
+                                    <div class="activity-action">{{ activity.action }}</div>
+                                    <div class="activity-time">{{ activity.time }}</div>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="dashboard-section">
+                        <div class="section-header">
+                            <h2 class="section-title">Quick Actions</h2>
+                        </div>
+                        <div class="quick-actions-grid" style="grid-template-columns: 1fr 1fr;">
+                            <a href="{{ url_for('admin_crop_add') }}" class="action-btn">
+                                <span class="action-icon"><i data-lucide="plus-circle"></i></span>
+                                <span class="action-label">Add Crop</span>
+                            </a>
+                            <a href="{{ url_for('admin_diseases') }}" class="action-btn">
+                                <span class="action-icon"><i data-lucide="microscope"></i></span>
+                                <span class="action-label">Manage Diseases</span>
+                            </a>
+                            <a href="{{ url_for('admin_analytics') }}" class="action-btn">
+                                <span class="action-icon"><i data-lucide="bar-chart-3"></i></span>
+                                <span class="action-label">View Reports</span>
+                            </a>
+                            <a href="{{ url_for('admin_settings') }}" class="action-btn">
+                                <span class="action-icon"><i data-lucide="settings"></i></span>
+                                <span class="action-label">Settings</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="charts-grid">
+                    <!-- Diagnosis Trend Chart -->
+                    <div class="chart-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                            <h3 style="margin:0;">Diagnosis Trend (Last 30 Days)</h3>
+                            <span id="trend-status" style="font-size:0.8rem; color:#888;">Loading...</span>
+                        </div>
+                        <canvas id="diagnosisTrendChart" height="100"></canvas>
+                    </div>
+
+                    <!-- Top Diagnosed Diseases Chart -->
+                    <div class="chart-container" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                            <h3 style="margin:0;">Top Diagnosed Diseases</h3>
+                            <span id="diseases-status" style="font-size:0.8rem; color:#888;">Loading...</span>
+                        </div>
+                        <canvas id="topDiseasesChart" height="120"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .method-breakdown {
+            margin-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 0.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .method-row {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.75rem;
+            color: var(--text-medium);
+        }
+
+        .method-row.muted {
+            color: var(--text-light);
+            font-style: italic;
+        }
+
+        .method-icon {
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .method-icon i {
+            width: 14px;
+            height: 14px;
+        }
+
+        .method-name {
+            flex: 1;
+        }
+
+        .method-count {
+            font-weight: 700;
+            color: var(--primary-green);
+        }
+    </style>
+
+    <script>
+        // Sidebar Toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+        }
+
+        // ── Dashboard Charts ──────────────────────────────────────────────────────────
+
+        let trendChart = null;
+        let diseasesChart = null;
+
+        // Colour palette
+        const COLORS = [
+            '#2d5f4f', '#4a9b7f', '#5fb88c', '#7ec8a4',
+            '#a8d8c0', '#c5e8d8', '#e8f5f0', '#1a3d30'
+        ];
+
+        // ── Diagnosis Trend ───────────────────────────────────────────────────────────
+        async function loadTrendChart() {
+            const statusEl = document.getElementById('trend-status');
+            try {
+                const res = await fetch('/admin/api/diagnosis-trend');
+                const data = await res.json();
+
+                if (!data.success) {
+                    statusEl.textContent = 'Error loading data';
+                    return;
+                }
+
+                // Format labels as "Mar 16" style
+                const labels = data.labels.map(d => {
+                    const dt = new Date(d + 'T00:00:00');
+                    return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                });
+
+                const ctx = document.getElementById('diagnosisTrendChart').getContext('2d');
+
+                if (trendChart) trendChart.destroy();
+
+                trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Total Diagnoses',
+                                data: data.totals,
+                                borderColor: '#2d5f4f',
+                                backgroundColor: 'rgba(45,95,79,0.1)',
+                                borderWidth: 2.5,
+                                pointRadius: 3,
+                                pointHoverRadius: 6,
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Image-Based (AI)',
+                                data: data.image_based,
+                                borderColor: '#4a9b7f',
+                                backgroundColor: 'rgba(74,155,127,0.08)',
+                                borderWidth: 1.8,
+                                pointRadius: 2,
+                                pointHoverRadius: 5,
+                                fill: false,
+                                tension: 0.4,
+                                borderDash: [5, 3]
+                            },
+                            {
+                                label: 'Symptom-Based (KB)',
+                                data: data.symptom_based,
+                                borderColor: '#7ec8a4',
+                                backgroundColor: 'rgba(126,200,164,0.08)',
+                                borderWidth: 1.8,
+                                pointRadius: 2,
+                                pointHoverRadius: 5,
+                                fill: false,
+                                tension: 0.4,
+                                borderDash: [3, 3]
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+                            tooltip: {
+                                callbacks: {
+                                    title: items => items[0].label,
+                                    label: item => ` ${item.dataset.label}: ${item.parsed.y}`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: { maxTicksLimit: 10, font: { size: 11 } }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1, font: { size: 11 } },
+                                grid: { color: 'rgba(0,0,0,0.05)' }
+                            }
+                        }
+                    }
+                });
+
+                const total = data.totals.reduce((a, b) => a + b, 0);
+                statusEl.textContent = `${total} diagnoses in last 30 days`;
+
+            } catch (err) {
+                console.error('Trend chart error:', err);
+                statusEl.textContent = 'Failed to load';
+            }
+        }
+
+        // ── Top Diagnosed Diseases ────────────────────────────────────────────────────
+        async function loadDiseasesChart() {
+            const statusEl = document.getElementById('diseases-status');
+            try {
+                const res = await fetch('/admin/api/top-diseases');
+                const data = await res.json();
+
+                if (!data.success || !data.diseases.length) {
+                    statusEl.textContent = data.diseases?.length === 0
+                        ? 'No diagnosis data yet'
+                        : 'Error loading data';
+                    return;
+                }
+
+                const ctx = document.getElementById('topDiseasesChart').getContext('2d');
+
+                if (diseasesChart) diseasesChart.destroy();
+
+                diseasesChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.diseases,
+                        datasets: [{
+                            label: 'Diagnosis Count',
+                            data: data.counts,
+                            backgroundColor: data.diseases.map((_, i) => COLORS[i % COLORS.length]),
+                            borderRadius: 6,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: item => ` ${item.parsed.x} diagnoses (${data.percentages[item.dataIndex]}%)`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1, font: { size: 11 } },
+                                grid: { color: 'rgba(0,0,0,0.05)' }
+                            },
+                            y: {
+                                grid: { display: false },
+                                ticks: { font: { size: 12 } }
+                            }
+                        }
+                    }
+                });
+
+                statusEl.textContent = `Top ${data.diseases.length} diseases`;
+
+            } catch (err) {
+                console.error('Diseases chart error:', err);
+                statusEl.textContent = 'Failed to load';
+            }
+        }
+
+        // ── Auto-refresh every 60 seconds ────────────────────────────────────────────
+        function initCharts() {
+            loadTrendChart();
+            loadDiseasesChart();
+            setInterval(() => {
+                loadTrendChart();
+                loadDiseasesChart();
+            }, 60_000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initCharts();
+        });
+
+        // Mobile responsiveness
+        if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.add('collapsed');
+            document.getElementById('mainContent').classList.add('expanded');
+        }
+    </script>
+</body>
+
+</html>

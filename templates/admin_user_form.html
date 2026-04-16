@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ action }} User - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;"><span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span></a>
+            </div>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">{{ action }} Admin User</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category=='success'%}✓{% elif category=='error'%}✕{% else %}ℹ{% endif
+                        %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <div class="breadcrumb"><a href="{{ url_for('admin_users') }}">← Back to Users</a></div>
+
+                <div class="form-card" style="max-width:680px;">
+                    <div class="form-card-header">
+                        <h2>{{ action }} User Details</h2>
+                        <p>{% if action == 'Add' %}Create a new admin account.{% else %}Update user account details.{%
+                            endif %}</p>
+                    </div>
+
+                    <form method="POST" style="padding:1.75rem 2rem;" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-row2">
+                            <div class="fg">
+                                <label class="fl req">Username</label>
+                                <input type="text" name="username" class="fi"
+                                    value="{{ user.username if user else '' }}" placeholder="e.g. john_admin" required>
+                            </div>
+                            <div class="fg">
+                                <label class="fl req">Email</label>
+                                <input type="email" name="email" class="fi" value="{{ user.email if user else '' }}"
+                                    placeholder="admin@example.com" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row2">
+                            <div class="fg">
+                                <label class="fl req {% if action == 'Edit' %}{% endif %}">
+                                    {% if action == 'Edit' %}New Password <span
+                                        style="color:var(--text-light);font-weight:400">(leave blank to keep)</span>{%
+                                    else %}Password{% endif %}
+                                </label>
+                                <input type="password"
+                                    name="{% if action == 'Edit' %}new_password{% else %}password{% endif %}" class="fi"
+                                    placeholder="{% if action == 'Edit' %}Enter new password…{% else %}Minimum 8 characters{% endif %}"
+                                    {% if action=='Add' %}required{% endif %}>
+                            </div>
+                            <div class="fg">
+                                <label class="fl">Role</label>
+                                <select name="role" class="fi">
+                                    <option value="admin" {% if user and user.role=='admin' %}selected{% endif %}>Admin
+                                    </option>
+                                    <option value="superadmin" {% if user and user.role=='superadmin' %}selected{% endif
+                                        %}>Super Admin</option>
+                                    <option value="viewer" {% if user and user.role=='viewer' %}selected{% endif %}>
+                                        Viewer (Read-only)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <a href="{{ url_for('admin_users') }}" class="btn-admin btn-admin-ghost">Cancel</a>
+                            <button type="submit" class="btn-admin btn-admin-primary">
+                                {% if action == 'Add' %}Create User{% else %}Save Changes{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .breadcrumb {
+            margin-bottom: 1.5rem;
+        }
+
+        .breadcrumb a {
+            color: var(--accent-green);
+            text-decoration: none;
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .form-card-header {
+            padding: 1.5rem 2rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .form-card-header h2 {
+            margin: 0 0 0.25rem;
+            font-size: var(--font-size-xl);
+        }
+
+        .form-card-header p {
+            margin: 0;
+            color: var(--text-light);
+            font-size: var(--font-size-sm);
+        }
+
+        .form-row2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .fg {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fl {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.4rem;
+            font-size: var(--font-size-sm);
+        }
+
+        .fl.req::after {
+            content: ' *';
+            color: #dc2626;
+        }
+
+        .fi {
+            width: 100%;
+            padding: 0.6rem 0.9rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-base);
+            box-sizing: border-box;
+        }
+
+        .fi:focus {
+            outline: none;
+            border-color: var(--accent-green);
+            box-shadow: 0 0 0 3px rgba(95, 184, 140, 0.12);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .btn-admin {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 1.35rem;
+            border-radius: var(--radius-md);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            transition: all var(--transition-fast);
+        }
+
+        .btn-admin-primary {
+            background: var(--primary-green);
+            color: white;
+        }
+
+        .btn-admin-ghost {
+            background: transparent;
+            color: var(--text-medium);
+            border: 1px solid var(--border-color);
+        }
+
+        @media(max-width:600px) {
+            .form-row2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script>
+        lucide.createIcons();
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+    </script>
+</body>
+
+</html>

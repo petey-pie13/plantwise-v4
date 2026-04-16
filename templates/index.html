@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PlantWise - AI-Powered Crop Advisory and Disease Diagnosis System">
+    <title>PlantWise - Smart Farming Solutions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Crop Advisory & Diagnostics System</p>
+                </div>
+            </div>
+            <button class="admin-btn" onclick="window.location.href='/admin'">
+                <span>Admin Panel</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container hero-content">
+            <div class="hero-badge">
+                <span>Powered by AI</span>
+            </div>
+            <h1>Smart Farming Solutions</h1>
+            <p>Get expert crop recommendations and diagnose plant diseases with confidence using our intelligent
+                agricultural decision support system</p>
+            <div class="hero-buttons">
+                <a href="#modules" class="btn btn-primary">
+                    <span>Crop Advisory</span>
+                </a>
+                <a href="#modules" class="btn btn-secondary">
+                    <span>Disease Diagnosis</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <div class="features-header">
+                <h2>Core Features</h2>
+                <p>Advanced agricultural intelligence at your fingertips</p>
+            </div>
+            <div class="features-grid">
+                <div class="card">
+                    <div class="card-icon primary">
+                    </div>
+                    <h3>Crop Suitability</h3>
+                    <p>Get personalized crop recommendations based on soil pH, rainfall, temperature, and location</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon secondary">
+                    </div>
+                    <h3>AI Image Analysis</h3>
+                    <p>Upload plant images for instant disease identification using Plant.id API with high accuracy</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon light">
+                    </div>
+                    <h3>Fuzzy Logic Engine</h3>
+                    <p>Sophisticated inference engine combining rule-based reasoning and certainty factors</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon primary">
+                    </div>
+                    <h3>Expert Knowledge Base</h3>
+                    <p>Curated database of diseases, symptoms, treatments, and cultural practices</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Module Selection Section -->
+    <section class="modules-section" id="modules">
+        <div class="container">
+            <div class="modules-header">
+                <h2>Choose Your Module</h2>
+                <p>Select the tool that fits your agricultural needs</p>
+            </div>
+            <div class="modules-grid">
+                <!-- Crop Advisory Module -->
+                <div class="module-card"
+                    style="background-image: linear-gradient(rgba(45, 95, 79, 0.85), rgba(74, 155, 127, 0.85)), url('{{ url_for('static', filename='Images/image.png') }}'); background-size: cover; background-position: center; color: white;">
+                    <div class="module-card-icon">
+                    </div>
+                    <h3 style="color: white;">Crop Suitability Advisory</h3>
+                    <p style="color: rgba(255, 255, 255, 0.95);">Determine which crops are best suited for your
+                        environmental conditions</p>
+
+                    <div class="module-features">
+                        <div class="module-feature">Interactive location and soil parameter inputs</div>
+                        <div class="module-feature">Fuzzy logic processing for environmental variables</div>
+                        <div class="module-feature">Ranked crop recommendations with confidence scores</div>
+                    </div>
+
+                    <a href="/advisory" class="btn btn-primary"
+                        style="text-decoration: none; display: inline-block;">Start Crop Advisory</a>
+                </div>
+
+                <!-- Disease Diagnosis Module -->
+                <div class="module-card secondary"
+                    style="background-image: linear-gradient(rgba(95, 184, 140, 0.85), rgba(141, 205, 176, 0.85)), url('{{ url_for('static', filename='Images/lens.png') }}'); background-size: cover; background-position: center; color: white;">
+                    <div class="module-card-icon">
+                    </div>
+                    <h3 style="color: white;">Disease Diagnosis</h3>
+                    <p style="color: rgba(255, 255, 255, 0.95);">Identify crop diseases through symptoms or AI-powered
+                        image analysis</p>
+
+                    <div class="module-features">
+                        <div class="module-feature">Symptom-based diagnosis with confidence ratings</div>
+                        <div class="module-feature">AI image recognition with Plant.id integration</div>
+                        <div class="module-feature">Detailed treatment recommendations and reasoning</div>
+                    </div>
+
+                    <a href="/diagnosis" class="btn btn-primary"
+                        style="text-decoration: none; display: inline-block;">Start Diagnosis</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer
+        style="background-color: var(--primary-green); color: white; padding: var(--spacing-2xl) 0; text-align: center;">
+        <div class="container">
+            <p>&copy; 2025 PlantWise Agricultural Expert System. All rights reserved.</p>
+            <p style="opacity: 0.8; font-size: var(--font-size-sm);">Developed by Audi Peter Ojwang' - KCA University
+            </p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

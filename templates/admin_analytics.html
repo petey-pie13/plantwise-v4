@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - PlantWise Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="sidebar-logo-icon"><i data-lucide="leaf"></i></div>
+                    <div class="sidebar-logo-text">
+                        <h2>PlantWise</h2>
+                        <p>Admin Panel</p>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item"><span class="nav-icon"><i data-lucide="layout-dashboard"></i></span><span>Dashboard</span></a>
+                <a href="{{ url_for('admin_crops') }}" class="nav-item"><span class="nav-icon"><i data-lucide="wheat"></i></span><span>Crops</span></a>
+                <a href="{{ url_for('admin_diseases') }}" class="nav-item"><span class="nav-icon"><i data-lucide="microscope"></i></span><span>Diseases</span></a>
+                <a href="{{ url_for('admin_users') }}" class="nav-item"><span class="nav-icon"><i data-lucide="users"></i></span><span>Users</span></a>
+                <a href="{{ url_for('admin_analytics') }}" class="nav-item active"><span class="nav-icon"><i data-lucide="bar-chart-3"></i></span><span>Analytics</span></a>
+                <a href="{{ url_for('admin_feedback') }}" class="nav-item"><span class="nav-icon"><i data-lucide="message-square"></i></span><span>Feedback</span></a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item"><span class="nav-icon"><i data-lucide="settings"></i></span><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="{{ url_for('admin_logout') }}" class="nav-item" style="color:#e2e8f0;"><span class="nav-icon"><i data-lucide="log-out"></i></span><span>Logout</span></a>
+            </div>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" onclick="toggleSidebar()"><i data-lucide="menu"></i></button>
+                    <h1 class="page-title">Analytics</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="admin-profile">
+                        <div class="profile-avatar">{{ admin_username[0].upper() }}</div>
+                        <div class="profile-info">
+                            <span class="profile-name">{{ admin_username }}</span>
+                            <span class="profile-role">Administrator</span>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('admin_logout') }}" class="btn-logout">Logout</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span class="alert-icon">{% if category=='success'%}✓{% elif category=='error'%}✕{% else %}ℹ{% endif
+                        %}</span>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <!-- Stat Cards -->
+                <div class="analytics-grid">
+                    <div class="stat-card green">
+                        <div class="stat-label">Total Crops</div>
+                        <div class="stat-value">{{ stats.get('total_crops', 0) }}</div>
+                        <div class="stat-sub">in database</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-label">Active Admins</div>
+                        <div class="stat-value">{{ stats.get('active_admin_users', 0) }}</div>
+                        <div class="stat-sub">user accounts</div>
+                    </div>
+                    <div class="stat-card amber">
+                        <div class="stat-label">Total Actions</div>
+                        <div class="stat-value">{{ stats.get('total_actions', 0) }}</div>
+                        <div class="stat-sub">in activity log</div>
+                    </div>
+                </div>
+
+                <!-- Two-column: Activity Breakdown + Recent Logins -->
+                <div class="analytics-cols">
+                    <!-- Activity Breakdown Chart -->
+                    <div class="analytics-card">
+                        <div class="card-header">
+                            <h2>Activity Breakdown</h2>
+                        </div>
+                        {% if activity_by_type %}
+                        <div style="padding:1.5rem;max-height:320px;display:flex;justify-content:center;">
+                            <canvas id="activityChart" style="max-height:260px;"></canvas>
+                        </div>
+                        <div class="legend">
+                            {% for action_type, cnt in activity_by_type.items() %}
+                            <div class="legend-item">
+                                <span class="legend-dot" data-idx="{{ loop.index0 }}"></span>
+                                <span>{{ action_type.replace('_',' ').title() }}</span>
+                                <span class="legend-val">{{ cnt }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="no-data">No activity recorded yet.</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Recent Login Table -->
+                    <div class="analytics-card">
+                        <div class="card-header">
+                            <h2>Recent Login Activity</h2>
+                        </div>
+                        {% if recent_logins %}
+                        <table class="log-table">
+                            <thead>
+                                <tr>
+                                    <th>Actor</th>
+                                    <th>Action</th>
+                                    <th>IP</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in recent_logins %}
+                                <tr>
+                                    <td><strong>{{ row.actor }}</strong></td>
+                                    <td>{{ row.description[:55] }}{% if row.description|length > 55 %}…{% endif %}</td>
+                                    <td class="mono">{{ row.ip_address or '—' }}</td>
+                                    <td class="mono muted">{{ row.created_at.strftime('%d %b %H:%M') if row.created_at
+                                        else '—' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="no-data">No login records found.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <style>
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stat-card.green {
+            border-left: 4px solid var(--primary-green);
+        }
+
+        .stat-card.blue {
+            border-left: 4px solid #3b82f6;
+        }
+
+        .stat-card.amber {
+            border-left: 4px solid #f59e0b;
+        }
+
+        .stat-label {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--text-medium);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            line-height: 1;
+        }
+
+        .stat-sub {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 0.35rem;
+        }
+
+        .analytics-cols {
+            display: grid;
+            grid-template-columns: 1fr 1.4fr;
+            gap: 1.25rem;
+        }
+
+        @media(max-width:900px) {
+            .analytics-cols {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .analytics-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-header h2 {
+            margin: 0;
+            font-size: var(--font-size-lg);
+        }
+
+        .legend {
+            padding: 0.75rem 1.5rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: var(--font-size-sm);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--primary-green);
+            flex-shrink: 0;
+        }
+
+        .legend-val {
+            margin-left: auto;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .no-data {
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-light);
+            font-size: var(--font-size-sm);
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--font-size-sm);
+        }
+
+        .log-table th {
+            background: var(--bg-light);
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-medium);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .log-table td {
+            padding: 0.65rem 1rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+        }
+
+        .log-table tbody tr:hover {
+            background: var(--bg-light);
+        }
+
+        .log-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .mono {
+            font-size: 0.75rem;
+            font-family: monospace;
+        }
+
+        .muted {
+            color: var(--text-light);
+        }
+    </style>
+
+    <script>
+        lucide.createIcons();
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        }
+
+        {% if activity_by_type %}
+        const colours = ['#2d5f4f', '#4a9b7f', '#5fb88c', '#8dcdb0', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', '#ec4899'];
+        const labels = {{ activity_by_type.keys() | list | tojson }};
+        const data = {{ activity_by_type.values() | list | tojson }};
+
+        // Apply colours to legend dots
+        document.querySelectorAll('.legend-dot').forEach((dot, i) => {
+            dot.style.background = colours[i % colours.length];
+        });
+
+        const ctx = document.getElementById('activityChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels.map(l => l.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())),
+                datasets: [{ data, backgroundColor: colours.slice(0, labels.length), borderWidth: 2 }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } }
+            }
+        });
+        {% endif %}
+    </script>
+</body>
+
+</html>

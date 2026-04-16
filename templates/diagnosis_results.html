@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnosis Results - PlantWise</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <style>
+        .results-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-2xl) var(--spacing-xl);
+        }
+
+        .results-header {
+            text-align: center;
+            margin-bottom: var(--spacing-3xl);
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--success-green), var(--accent-green));
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: white;
+            margin-bottom: var(--spacing-lg);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: var(--spacing-2xl);
+            margin-bottom: var(--spacing-3xl);
+        }
+
+        /* Image Section */
+        .image-section {
+            position: sticky;
+            top: var(--spacing-xl);
+            height: fit-content;
+        }
+
+        .image-card {
+            background: var(--bg-white);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
+        }
+
+        .image-card h3 {
+            color: var(--primary-green);
+            margin-bottom: var(--spacing-md);
+            font-size: var(--font-size-lg);
+        }
+
+        .uploaded-image {
+            width: 100%;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .image-info {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            color: var(--text-medium);
+            font-size: var(--font-size-sm);
+        }
+
+        /* Disease Tiles Grid */
+        .disease-tiles {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: var(--spacing-2xl);
+        }
+
+        .disease-tile {
+            background: var(--bg-white);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            box-shadow: var(--shadow-md);
+            border: 2px solid var(--border-color);
+            transition: all var(--transition-base);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .disease-tile:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .disease-tile.high-confidence {
+            border-color: var(--success-green);
+        }
+
+        .disease-tile.medium-confidence {
+            border-color: var(--warning-yellow);
+        }
+
+        .disease-tile.low-confidence {
+            border-color: var(--text-light);
+        }
+
+        .confidence-badge {
+            position: absolute;
+            top: var(--spacing-md);
+            right: var(--spacing-md);
+            background: linear-gradient(135deg, var(--accent-green), var(--primary-green));
+            color: white;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            font-size: var(--font-size-sm);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .disease-tile.medium-confidence .confidence-badge {
+            background: linear-gradient(135deg, var(--warning-yellow), #e69500);
+        }
+
+        .disease-tile.low-confidence .confidence-badge {
+            background: linear-gradient(135deg, var(--text-light), var(--text-medium));
+        }
+
+        .tile-rank {
+            width: 32px;
+            height: 32px;
+            background: var(--primary-green);
+            color: white;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .tile-content h3 {
+            color: var(--text-dark);
+            margin-bottom: var(--spacing-sm);
+            font-size: var(--font-size-xl);
+            text-transform: capitalize;
+        }
+
+        .tile-source {
+            color: var(--accent-green);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .tile-description {
+            color: var(--text-medium);
+            line-height: 1.6;
+            margin-bottom: var(--spacing-md);
+            font-size: var(--font-size-sm);
+        }
+
+        .tile-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+
+        .tile-details.expanded {
+            max-height: 2000px;
+        }
+
+        /* Severity badge */
+        .severity-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: var(--radius-full);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .severity-low {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .severity-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .severity-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .severity-critical {
+            background: #fce7f3;
+            color: #9d174d;
+        }
+
+        /* Treatment tabs */
+        .treatment-tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+            padding-top: var(--spacing-lg);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .tx-tab {
+            padding: 4px 12px;
+            border-radius: var(--radius-full);
+            border: 1.5px solid var(--border-color);
+            background: var(--bg-light);
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tx-tab.active {
+            background: var(--primary-green);
+            color: white;
+            border-color: var(--primary-green);
+        }
+
+        .tx-panel {
+            display: none;
+        }
+
+        .tx-panel.active {
+            display: block;
+        }
+
+        .tx-item {
+            background: var(--bg-light);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .tx-item strong {
+            color: var(--text-dark);
+            font-size: var(--font-size-sm);
+        }
+
+        .tx-item p {
+            color: var(--text-medium);
+            font-size: var(--font-size-base);
+            margin: 4px 0 0;
+            line-height: 1.6;
+        }
+
+        .tx-item .tx-meta {
+            font-size: 0.72rem;
+            color: var(--accent-green);
+            margin-top: 4px;
+        }
+
+        /* Feedback button */
+        .feedback-row {
+            margin-top: var(--spacing-md);
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+        }
+
+        .feedback-btn {
+            font-size: var(--font-size-sm);
+            padding: 5px 14px;
+            border-radius: var(--radius-full);
+            border: 1.5px solid var(--border-color);
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .feedback-btn:hover {
+            border-color: var(--primary-green);
+            color: var(--primary-green);
+        }
+
+        .feedback-btn.correct {
+            border-color: #16a34a;
+            background: #d1fae5;
+            color: #15803d;
+        }
+
+        .feedback-btn.incorrect {
+            border-color: #dc2626;
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .treatment-section {
+            margin-top: var(--spacing-lg);
+            padding-top: var(--spacing-lg);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .treatment-section h4 {
+            color: var(--primary-green);
+            margin-bottom: var(--spacing-sm);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            font-size: var(--font-size-base);
+        }
+
+        .treatment-text {
+            color: var(--text-medium);
+            line-height: 1.7;
+            font-size: var(--font-size-base);
+        }
+
+        .expand-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            color: var(--accent-green);
+            font-weight: 500;
+            font-size: var(--font-size-sm);
+            margin-top: var(--spacing-md);
+            transition: color var(--transition-fast);
+        }
+
+        .expand-btn:hover {
+            color: var(--primary-green);
+        }
+
+        .expand-arrow {
+            transition: transform var(--transition-base);
+        }
+
+        .expand-arrow.rotated {
+            transform: rotate(180deg);
+        }
+
+        /* Methodology Box */
+        .methodology-box {
+            background: linear-gradient(135deg, rgba(95, 184, 140, 0.1), rgba(45, 95, 79, 0.05));
+            border: 1px solid var(--accent-green-light);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            margin-bottom: var(--spacing-2xl);
+        }
+
+        .methodology-box h3 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            color: var(--primary-green);
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing-md);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .image-section {
+                position: static;
+            }
+
+            .disease-tiles {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .results-container {
+                padding: var(--spacing-xl) var(--spacing-md);
+            }
+
+            .success-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+            }
+
+            .tile-content h3 {
+                font-size: var(--font-size-lg);
+            }
+        }
+
+        /* No Image Layout */
+        .results-grid.no-image {
+            grid-template-columns: 1fr;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Crop Advisory & Diagnostics System</p>
+                </div>
+            </div>
+            <button class="admin-btn" onclick="window.location.href='/admin'">
+                <span>Admin Panel</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Back Link -->
+    <a href="/diagnosis" class="back-link">
+        <span>←</span>
+        <span>Back to Diagnosis</span>
+    </a>
+
+    <!-- Results Section -->
+    <div class="results-container">
+        {% if diseases %}
+        <!-- Success Header -->
+        <div class="results-header">
+            <div class="success-icon">✓</div>
+            <h1>Diagnosis Results for {{ crop }}</h1>
+            <p style="color: var(--text-medium); font-size: var(--font-size-lg);">
+                {{ diseases|length }} disease{% if diseases|length != 1 %}s{% endif %} identified using AI hybrid
+                analysis
+            </p>
+        </div>
+
+        <!-- Results Grid -->
+        <div class="results-grid {% if not uploaded_image_url %}no-image{% endif %}">
+            <!-- Image Section (only show if image exists) -->
+            {% if uploaded_image_url %}
+            <div class="image-section">
+                <div class="image-card">
+                    <h3>Analyzed Image</h3>
+                    <img src="{{ uploaded_image_url }}" alt="Uploaded crop image" class="uploaded-image">
+                    <div class="image-info">
+                        <span></span>
+                        <span>Analyzed by Nvidia Nemotron AI</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Disease Tiles -->
+            <div class="disease-tiles">
+                {% for disease in diseases %}
+                {% set conf_class = 'high-confidence' if disease.confidence >= 70 else ('medium-confidence' if
+                disease.confidence >= 40 else 'low-confidence') %}
+                {% set sev = disease.severity | default('medium') %}
+                <div class="disease-tile {{ conf_class }}" onclick="toggleTileDetails('tile-{{ loop.index }}', event)">
+                    <div class="confidence-badge">{{ disease.confidence }}%</div>
+                    <div class="tile-rank">{{ loop.index }}</div>
+                    <div class="tile-content">
+                        <h3>{{ disease.name }}</h3>
+                        {% if disease.scientific_name %}
+                        <div
+                            style="font-style:italic;color:var(--text-light);font-size:var(--font-size-sm);margin-bottom:4px;">
+                            {{ disease.scientific_name }}</div>
+                        {% endif %}
+                        <span class="severity-badge severity-{{ sev }}">{{ sev }} severity</span>
+                        <div class="tile-source">
+                            <span></span>
+                            <span>{{ disease.source }}</span>
+                        </div>
+                        <p class="tile-description">{{ disease.description }}</p>
+
+                        <div id="tile-{{ loop.index }}" class="tile-details">
+                            {% if disease.treatment_groups %}
+                            {# ── Tabbed Treatment Groups ── #}
+                            <div class="treatment-tabs" id="tabs-{{ loop.index }}">
+                                {% for ttype in ['chemical','biological','cultural','prevention'] %}
+                                {% if disease.treatment_groups[ttype] is defined and disease.treatment_groups[ttype] %}
+                                <button class="tx-tab {% if loop.first %}active{% endif %}"
+                                    onclick="switchTab(event,'tabs-{{ loop.index }}','panel-{{ loop.index }}-{{ ttype }}')">
+                                    {{
+                                    {'chemical':'Chemical','biological':'Biological','cultural':'Cultural','prevention':'Prevention'}[ttype]
+                                    }}
+                                </button>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% for ttype in ['chemical','biological','cultural','prevention'] %}
+                            {% if disease.treatment_groups[ttype] is defined and disease.treatment_groups[ttype] %}
+                            <div id="panel-{{ loop.index }}-{{ ttype }}"
+                                class="tx-panel {% if loop.first %}active{% endif %}">
+                                {% for tx in disease.treatment_groups[ttype] %}
+                                <div class="tx-item">
+                                    <strong>{{ tx.title }}</strong>
+                                    <p>{{ tx.description }}</p>
+                                    {% if tx.dosage or tx.timing or tx.products %}
+                                    <div class="tx-meta">
+                                        {% if tx.dosage %} {{ tx.dosage }}{% endif %}
+                                        {% if tx.timing %} &nbsp;·&nbsp; {{ tx.timing }}{% endif %}
+                                        {% if tx.products %} &nbsp;·&nbsp; {{ tx.products }}{% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                            {% else %}
+                            {# ── Flat fallback treatment ── #}
+                            <div class="treatment-section">
+                                <h4>Treatment Recommendations</h4>
+                                <p class="treatment-text">{{ disease.treatment or 'Consult an agricultural expert.' }}
+                                </p>
+                            </div>
+                            {% endif %}
+
+                            {# ── Feedback buttons ── #}
+                            <div class="feedback-row">
+                                <span style="font-size:var(--font-size-sm);color:var(--text-light);">Was this
+                                    correct?</span>
+                                <button class="feedback-btn"
+                                    onclick="sendFeedback(event, '{{ disease.name }}', true, this)">Yes</button>
+                                <button class="feedback-btn"
+                                    onclick="sendFeedback(event, '{{ disease.name }}', false, this)">No</button>
+                            </div>
+                        </div>
+
+                        <div class="expand-btn">
+                            <span class="expand-text">Show treatment &amp; details</span>
+                            <span class="expand-arrow">▼</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Methodology Note -->
+        <div class="methodology-box">
+            <h3>
+
+                <span>Enhanced Diagnosis Engine!</span>
+            </h3>
+            <div
+                style="color: var(--text-medium); line-height: 1.7; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-lg);">
+                <div>
+                    <h4
+                        style="color: var(--primary-green); margin-bottom: var(--spacing-xs); font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: 0.05em;">
+                        Hybrid AI Fusion</h4>
+                    <p style="font-size: var(--font-size-sm);">Our latest update implements a <strong>weighted consensus
+                            algorithm</strong>. It fuses high-precision visual recognition from OpenRouter/Kindwise (70%
+                        weight) with deep-layer validation against our local East African expert database (30% weight).
+                    </p>
+                </div>
+                <div>
+                    <h4
+                        style="color: var(--primary-green); margin-bottom: var(--spacing-xs); font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: 0.05em;">
+                        Guided Visual Analysis</h4>
+                    <p style="font-size: var(--font-size-sm);">Unlike generic AI, our system uses <strong>pre-submission
+                            context</strong>. It intelligently briefs the vision models on crop-specific symptoms
+                        prevalent in Kenya before analysis, drastically reducing false positives.</p>
+                </div>
+                <div>
+                    <h4
+                        style="color: var(--primary-green); margin-bottom: var(--spacing-xs); font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: 0.05em;">
+                        Local Contextualization</h4>
+                    <p style="font-size: var(--font-size-sm);">Treatment plans are now dynamically mapped to
+                        <strong>KALRO and FAO East Africa guidelines</strong>, ensuring that recommended products and
+                        practices are accessible and effective for Kenyan smallholders.
+                    </p>
+                </div>
+            </div>
+            <p
+                style="margin-top: var(--spacing-lg); font-size: var(--font-size-sm); color: var(--text-light); border-top: 1px solid rgba(0,0,0,0.05); padding-top: var(--spacing-md);">
+                <em>Note: While our confidence scores are high, results should be verified by a local agricultural
+                    extension officer before applying intensive chemical treatments.</em>
+            </p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-success" onclick="window.location.href='/diagnosis'">
+                New Diagnosis
+            </button>
+            <button class="btn btn-outline" onclick="window.print()">
+                Print Report
+            </button>
+        </div>
+
+        {% else %}
+        <!-- No Results -->
+        <div style="text-align: center; padding: var(--spacing-3xl);">
+            <div style="font-size: 64px; margin-bottom: var(--spacing-lg);"></div>
+            <h2>No Results Available</h2>
+            <p style="color: var(--text-medium); margin-bottom: var(--spacing-xl);">
+                Please complete a diagnosis first.
+            </p>
+            <button class="btn btn-success" onclick="window.location.href='/diagnosis'">
+                Start Diagnosis
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleTileDetails(id, event) {
+            // Don't toggle if click came from a tab or feedback button
+            if (event && (event.target.classList.contains('tx-tab') ||
+                event.target.classList.contains('feedback-btn'))) return;
+            const tile = document.getElementById(id);
+            const card = tile.closest('.disease-tile');
+            const btn = card.querySelector('.expand-btn');
+            const arrow = btn.querySelector('.expand-arrow');
+            const text = btn.querySelector('.expand-text');
+            const isExpanded = tile.classList.contains('expanded');
+            tile.classList.toggle('expanded');
+            arrow.classList.toggle('rotated');
+            text.textContent = isExpanded ? 'Show treatment & details' : 'Hide treatment & details';
+        }
+
+        function switchTab(event, tabsId, panelId) {
+            event.stopPropagation();
+            const tabsEl = document.getElementById(tabsId);
+            // Deactivate all tabs & panels inside this tile
+            const tile = tabsEl.closest('.disease-tile');
+            tile.querySelectorAll('.tx-tab').forEach(t => t.classList.remove('active'));
+            tile.querySelectorAll('.tx-panel').forEach(p => p.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            const panel = document.getElementById(panelId);
+            if (panel) panel.classList.add('active');
+        }
+
+        function sendFeedback(event, diseaseName, wasCorrect, btn) {
+            event.stopPropagation();
+            btn.parentElement.querySelectorAll('.feedback-btn').forEach(b => b.classList.remove('correct', 'incorrect'));
+            btn.classList.add(wasCorrect ? 'correct' : 'incorrect');
+            fetch('/api/diagnosis/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    disease_name: diseaseName,
+                    was_correct: wasCorrect,
+                    session_ref: '{{ session.get("diagnosis_results", {}).get("session_ref", "") }}'
+                })
+            }).catch(() => { }); // fire-and-forget
+            btn.textContent = wasCorrect ? '👍 Thanks!' : '👎 Noted';
+        }
+    </script>
+</body>
+
+</html>
