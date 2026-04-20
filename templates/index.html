@@ -7,6 +7,7 @@
     <meta name="description" content="PlantWise - AI-Powered Crop Advisory and Disease Diagnosis System">
     <title>PlantWise - Smart Farming Solutions</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
@@ -56,24 +57,28 @@
             <div class="features-grid">
                 <div class="card">
                     <div class="card-icon primary">
+                        <i data-lucide="sprout"></i>
                     </div>
                     <h3>Crop Suitability</h3>
                     <p>Get personalized crop recommendations based on soil pH, rainfall, temperature, and location</p>
                 </div>
                 <div class="card">
                     <div class="card-icon secondary">
+                        <i data-lucide="scan-eye"></i>
                     </div>
                     <h3>AI Image Analysis</h3>
                     <p>Upload plant images for instant disease identification using Plant.id API with high accuracy</p>
                 </div>
                 <div class="card">
                     <div class="card-icon light">
+                        <i data-lucide="cpu"></i>
                     </div>
                     <h3>Fuzzy Logic Engine</h3>
                     <p>Sophisticated inference engine combining rule-based reasoning and certainty factors</p>
                 </div>
                 <div class="card">
                     <div class="card-icon primary">
+                        <i data-lucide="book-open"></i>
                     </div>
                     <h3>Expert Knowledge Base</h3>
                     <p>Curated database of diseases, symptoms, treatments, and cultural practices</p>
@@ -94,6 +99,7 @@
                 <div class="module-card"
                     style="background-image: linear-gradient(rgba(45, 95, 79, 0.85), rgba(74, 155, 127, 0.85)), url('{{ url_for('static', filename='Images/image.png') }}'); background-size: cover; background-position: center; color: white;">
                     <div class="module-card-icon">
+                        <i data-lucide="wheat"></i>
                     </div>
                     <h3 style="color: white;">Crop Suitability Advisory</h3>
                     <p style="color: rgba(255, 255, 255, 0.95);">Determine which crops are best suited for your
@@ -113,6 +119,7 @@
                 <div class="module-card secondary"
                     style="background-image: linear-gradient(rgba(95, 184, 140, 0.85), rgba(141, 205, 176, 0.85)), url('{{ url_for('static', filename='Images/lens.png') }}'); background-size: cover; background-position: center; color: white;">
                     <div class="module-card-icon">
+                        <i data-lucide="microscope"></i>
                     </div>
                     <h3 style="color: white;">Disease Diagnosis</h3>
                     <p style="color: rgba(255, 255, 255, 0.95);">Identify crop diseases through symptoms or AI-powered
@@ -142,6 +149,7 @@
     </footer>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>lucide.createIcons();</script>
 </body>
 
 </html>
