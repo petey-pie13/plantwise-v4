@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Disease Diagnosis - PlantWise</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
@@ -45,6 +46,7 @@
             <div class="diagnosis-option" onclick="selectDiagnosisMethod('hybrid')">
                 <span class="option-badge recommended">Recommended</span>
                 <div class="diagnosis-option-icon light">
+                    <i data-lucide="brain-circuit"></i>
                 </div>
                 <h3>Hybrid AI Analysis</h3>
                 <p>Upload plant photos for confident disease identification. Our diagnosis engine fuses AI visual analysis with local East African knowledge base data for maximum accuracy and practical treatment guidance.</p>
@@ -84,7 +86,7 @@
 
                     <div style="background-color: var(--bg-color); border-radius: var(--border-radius-md); padding: var(--spacing-md); margin-bottom: var(--spacing-md); border-left: 4px solid var(--accent-blue);">
                         <h4 style="margin-top: 0; margin-bottom: var(--spacing-sm); display: flex; align-items: center; gap: var(--spacing-xs);">
-                            <span></span> Photo Guidelines for Best Results
+                            <i data-lucide="lightbulb" style="width:16px;height:16px;color:var(--accent-blue);"></i> Photo Guidelines for Best Results
                         </h4>
                         <ul style="margin: 0; padding-left: var(--spacing-lg); color: var(--text-medium); font-size: var(--font-size-sm); line-height: 1.5;">
                             <li><strong>Get Close:</strong> Ensure the affected leaf, stem, or fruit fills most of the frame.</li>
@@ -95,7 +97,7 @@
                     </div>
 
                     <div class="upload-zone" id="upload-zone">
-                        <div class="upload-icon"></div>
+                        <div class="upload-icon"><i data-lucide="image-up"></i></div>
                         <h3>Drag and drop images here, or click to select</h3>
                         <p>JPG, PNG up to 5MB each (max 3 images)</p>
                         <input type="file" id="image-input" accept="image/jpeg,image/png" multiple
@@ -195,6 +197,7 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script src="{{ url_for('static', filename='js/diagnosis.js') }}"></script>
     <script src="{{ url_for('static', filename='js/imageUpload.js') }}"></script>
+    <script>lucide.createIcons();</script>
 </body>
 
 </html>

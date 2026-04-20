@@ -6,6 +6,7 @@
     <title>Recommendations Results - PlantWise</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/advisory_enhanced.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         .result-actions {
             display: flex;
@@ -69,6 +70,7 @@
     </main>
 
     <script>
+        lucide.createIcons();
         document.addEventListener('DOMContentLoaded', () => {
             const data = JSON.parse(sessionStorage.getItem('advisory_results'));
             if (!data || !data.success) {
@@ -162,8 +164,8 @@
                             </div>
 
                             <div class="card-actions">
-                                <button class="btn btn-outline">Market Prices</button>
-                                <button class="btn btn-primary">Planting Guide</button>
+                                <a href="/advisory" class="btn btn-outline" style="font-size:0.85rem;">New Assessment</a>
+                                <button class="btn btn-primary" onclick="window.print()" style="font-size:0.85rem;">Print Results</button>
                             </div>
                         </div>
                     </div>

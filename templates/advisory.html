@@ -7,6 +7,7 @@
     <title>Crop Advisory - PlantWise</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/advisory_enhanced.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
@@ -53,7 +54,7 @@
             <!-- STEP 1: Location -->
             <div class="step active" id="step-1">
                 <div class="step-header">
-                    <div class="step-icon"></div>
+                    <div class="step-icon"><i data-lucide="map-pin"></i></div>
                     <div class="step-title">
                         <h2>Location Information</h2>
                         <p>We're identifying your area to give you precise recommendations</p>
@@ -91,7 +92,7 @@
             <!-- STEP 2: Conditions (rainfall and temperature auto-filled) -->
             <div class="step" id="step-2" style="display:none;">
                 <div class="step-header">
-                    <div class="step-icon"></div>
+                    <div class="step-icon"><i data-lucide="cloud-sun"></i></div>
                     <div class="step-title">
                         <h2>Ecological Conditions</h2>
                         <p>Based on your location, we've fetched the current environment patterns</p>
@@ -150,7 +151,7 @@
             <!-- STEP 3: Soil pH -->
             <div class="step" id="step-3" style="display:none;">
                 <div class="step-header">
-                    <div class="step-icon"></div>
+                    <div class="step-icon"><i data-lucide="flask-conical"></i></div>
                     <div class="step-title">
                         <h2>Soil pH & Profile</h2>
                         <p>Adjust the slider if you have a recent soil test result</p>
@@ -220,7 +221,7 @@
             <!-- STEP 4: Review -->
             <div class="step" id="step-4" style="display:none;">
                 <div class="step-header">
-                    <div class="step-icon"></div>
+                    <div class="step-icon"><i data-lucide="clipboard-check"></i></div>
                     <div class="step-title">
                         <h2>Review Your Information</h2>
                         <p>Please confirm your details before we generate recommendations</p>
@@ -271,6 +272,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/advisory.js') }}"></script>
+    <script>lucide.createIcons();</script>
 
 </body>
 
