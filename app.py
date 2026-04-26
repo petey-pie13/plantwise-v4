@@ -11,8 +11,9 @@ from flask_cors import CORS
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import mysql.connector
-from mysql.connector import Error
+import psycopg2
+import psycopg2.extras
+from psycopg2 import OperationalError as Error
 import os
 import uuid
 from datetime import timedelta
@@ -114,12 +115,13 @@ limiter = Limiter(
 # ---------------------------------------------------------------------------
 # C3 — Database configuration: no hardcoded fallback for password
 # ---------------------------------------------------------------------------
+DATABASE_URL = os.getenv('DATABASE_URL')  # Railway sets this automatically
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', ''),
-    'database': os.getenv('DB_NAME', 'crop_advisory'),
-    'port': int(os.getenv('DB_PORT', 3306))
+    'host':     os.getenv('DB_HOST', 'localhost'),
+    'user':     os.getenv('DB_USER', 'postgres'),
+    'password': os.getenv('DB_PASSWORD', 'Audi_123'),
+    'dbname':   os.getenv('DB_NAME', 'crop_advisory'),  # NOTE: 'dbname' not 'database'
+    'port':     int(os.getenv('DB_PORT', 5432))
 }
 
 # Rainfall and Temperature mappings (mm/year and °C)
@@ -146,14 +148,17 @@ TEMPERATURE_RANGES = {
 
 def get_db_connection():
     """
-    Create and return a database connection to crop_advisory database
+    Create and return a database connection to crop_advisory (PostgreSQL).
+    Supports both DATABASE_URL (Railway) and individual env vars (local dev).
     """
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
-        if connection.is_connected():
-            return connection
+        if DATABASE_URL:
+            connection = psycopg2.connect(DATABASE_URL, sslmode='require')
+        else:
+            connection = psycopg2.connect(**DB_CONFIG)
+        return connection
     except Error as e:
-        logger.error(f"Error connecting to MySQL Database 'crop_advisory': {e}")
+        logger.error(f"Error connecting to PostgreSQL 'crop_advisory': {e}")
         return None
 
 
@@ -164,9 +169,9 @@ def close_db_connection(connection, cursor=None):
     try:
         if cursor:
             cursor.close()
-        if connection and connection.is_connected():
+        if connection and not connection.closed:
             connection.close()
-    except Error as e:
+    except Exception as e:
         logger.error(f"Error closing database connection: {e}")
 
 
@@ -203,9 +208,9 @@ def verify_admin_credentials(username: str, password: str):
     if not connection:
         return None
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(
-            "SELECT * FROM admin_users WHERE username = %s AND is_active = TRUE",
+            "SELECT * FROM admin_users WHERE username = %s AND is_active = 1",
             (username,)
         )
         user = cursor.fetchone()
@@ -271,7 +276,7 @@ def get_dashboard_stats() -> Dict:
         }
     
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         # Get crops count
         cursor.execute("SELECT COUNT(*) AS cnt FROM crops")
@@ -292,7 +297,7 @@ def get_dashboard_stats() -> Dict:
         # Count how many diagnoses happened today
         cursor.execute("""
             SELECT COUNT(*) AS cnt FROM diagnosis_sessions
-            WHERE DATE(created_at) = CURDATE()
+            WHERE DATE(created_at) = CURRENT_DATE
         """)
         diagnoses_today = cursor.fetchone()['cnt']
 
@@ -544,7 +549,7 @@ def get_crop_recommendations(county_id: int, county_name: str,
         return []
 
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         query = """
         SELECT
@@ -570,7 +575,7 @@ def get_crop_recommendations(county_id: int, county_name: str,
             cs.temp_max_c,
             COALESCE(ccs.suitability_modifier, 1.00) AS county_modifier,
             COALESCE(ccs.growing_notes, '')           AS growing_notes,
-            COALESCE(ccs.commonly_grown, TRUE)        AS commonly_grown
+            COALESCE(ccs.commonly_grown, 1)           AS commonly_grown
         FROM crop_suitability cs
         INNER JOIN crops c
             ON c.crop_id = cs.crop_id
@@ -582,7 +587,7 @@ def get_crop_recommendations(county_id: int, county_name: str,
             AND %s BETWEEN cs.rain_min_mm  AND cs.rain_max_mm
             AND %s BETWEEN cs.temp_min_c   AND cs.temp_max_c
             AND COALESCE(ccs.suitability_modifier, 1.00) >= 0.30
-            AND COALESCE(ccs.commonly_grown, TRUE) = TRUE
+            AND COALESCE(ccs.commonly_grown, 1) = 1
         """
 
         cursor.execute(query, (
@@ -694,7 +699,7 @@ def get_alternative_recommendations(county: str, soil_ph: float, rainfall: str, 
         return []
     
     try:
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         
         rainfall_mm = get_rainfall_avg(rainfall)
         temp_c = get_temperature_avg(temperature)
@@ -1261,7 +1266,7 @@ def admin_dashboard():
     connection = get_db_connection()
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("""
                 SELECT l.action_type, l.description, l.created_at,
                        COALESCE(u.username, 'System') AS actor
@@ -1308,7 +1313,7 @@ def admin_crops():
     total = 0
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             base_where = "WHERE 1=1"
             params: list = []
             if search:
@@ -1402,7 +1407,7 @@ def admin_crop_edit(crop_id):
 
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT * FROM crops WHERE crop_id = %s", (crop_id,))
             crop = cur.fetchone()
         except Error as e:
@@ -1466,7 +1471,7 @@ def admin_crop_delete(crop_id):
     connection = get_db_connection()
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT crop_name FROM crops WHERE crop_id = %s", (crop_id,))
             row = cur.fetchone()
             if not row:
@@ -1494,7 +1499,7 @@ def admin_api_crops():
     crops = []
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT * FROM crops ORDER BY crop_name")
             crops = cur.fetchall()
         except Error as e:
@@ -1519,7 +1524,7 @@ def admin_diseases():
     total = 0
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             base_sql = """
                 SELECT  d.disease_id,
                         d.name,
@@ -1573,7 +1578,7 @@ def admin_feedback():
 
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("""
                 SELECT  f.id,
                         f.session_ref,
@@ -1613,7 +1618,7 @@ def admin_users():
     users = []
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT id, username, email, role, is_active, last_login, created_at FROM admin_users ORDER BY created_at DESC")
             users = cur.fetchall()
         except Error as e:
@@ -1673,7 +1678,7 @@ def admin_user_edit(user_id):
     user = None
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT id, username, email, role, is_active FROM admin_users WHERE id = %s", (user_id,))
             user = cur.fetchone()
         except Error as e:
@@ -1733,11 +1738,11 @@ def admin_user_toggle(user_id):
     connection = get_db_connection()
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT username, is_active FROM admin_users WHERE id = %s", (user_id,))
             row = cur.fetchone()
             if row:
-                new_state = not row['is_active']
+                new_state = 1 if not row['is_active'] else 0
                 cur.execute("UPDATE admin_users SET is_active = %s WHERE id = %s", (new_state, user_id))
                 connection.commit()
                 action_word = 'activated' if new_state else 'deactivated'
@@ -1767,14 +1772,14 @@ def admin_analytics():
     connection = get_db_connection()
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
             # Total crops
             cur.execute("SELECT COUNT(*) AS cnt FROM crops")
             stats['total_crops'] = cur.fetchone()['cnt']
 
             # Total admin users
-            cur.execute("SELECT COUNT(*) AS cnt FROM admin_users WHERE is_active = TRUE")
+            cur.execute("SELECT COUNT(*) AS cnt FROM admin_users WHERE is_active = 1")
             stats['active_admin_users'] = cur.fetchone()['cnt']
 
             # Activity log totals by type
@@ -1825,7 +1830,7 @@ def admin_settings():
 
     if connection:
         try:
-            cur = connection.cursor(dictionary=True)
+            cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT setting_key, setting_val, description FROM system_settings ORDER BY setting_key")
             for row in cur.fetchall():
                 settings[row['setting_key']] = {'value': row['setting_val'], 'description': row['description']}
@@ -1847,7 +1852,8 @@ def admin_settings():
                     cur2.execute("""
                         INSERT INTO system_settings (setting_key, setting_val, updated_by)
                         VALUES (%s, %s, %s)
-                        ON DUPLICATE KEY UPDATE setting_val = VALUES(setting_val), updated_by = VALUES(updated_by)
+                        ON CONFLICT (setting_key)
+                        DO UPDATE SET setting_val = EXCLUDED.setting_val, updated_by = EXCLUDED.updated_by
                     """, (key, value, session.get('admin_id')))
                 conn2.commit()
                 log_admin_activity(session.get('admin_id'), 'settings_update', 'Updated system settings')
@@ -1960,7 +1966,7 @@ def api_county_soil_profile():
         return jsonify({'success': False, 'error': 'Database unavailable'}), 500
 
     try:
-        cur = conn.cursor(dictionary=True)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         if county_id:
             cur.execute("""
@@ -2275,7 +2281,7 @@ def api_reverse_geocode():
             conn = get_db_connection()
             if conn:
                 try:
-                    cur = conn.cursor(dictionary=True)
+                    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
                     # Try exact match first
                     cur.execute(
@@ -2356,7 +2362,7 @@ def api_get_recommendations():
     soil_profile = None
 
     try:
-        cur = conn.cursor(dictionary=True)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         # Resolve county_id from name
         cur.execute(
@@ -2612,7 +2618,7 @@ def get_knowledge_base_results(crop: str) -> List[Dict]:
         return []
 
     try:
-        cur = conn.cursor(dictionary=True)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         # Get all diseases linked to this crop, ordered by KB confidence
         cur.execute("""
@@ -2896,7 +2902,7 @@ def admin_api_diagnosis_trend():
         return jsonify({'success': False, 'error': 'DB unavailable'}), 500
 
     try:
-        cur = connection.cursor(dictionary=True)
+        cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT
                 DATE(created_at)            AS day,
@@ -2904,7 +2910,7 @@ def admin_api_diagnosis_trend():
                 SUM(method = 'hybrid')      AS image_based,
                 SUM(method = 'knowledge_base') AS symptom_based
             FROM diagnosis_sessions
-            WHERE created_at >= CURDATE() - INTERVAL 29 DAY
+            WHERE created_at >= CURRENT_DATE - INTERVAL '29 days'
             GROUP BY DATE(created_at)
             ORDER BY day ASC
         """)
@@ -2950,7 +2956,7 @@ def admin_api_top_diseases():
         return jsonify({'success': False, 'error': 'DB unavailable'}), 500
 
     try:
-        cur = connection.cursor(dictionary=True)
+        cur = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT
                 top_disease             AS disease,
@@ -2986,12 +2992,18 @@ def admin_api_top_diseases():
 
 if __name__ == '__main__':
     if test_database_connection():
+        env = os.getenv('FLASK_ENV', 'production')
         port = int(os.environ.get('PORT', 5000))
         debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
         print("Starting PlantWise Agricultural Expert System...")
-        print(f"Access at: http://localhost:{port}\n")
-        # ssl_context='adhoc' removed — production SSL is handled by the reverse proxy
-        app.run(debug=debug, host='0.0.0.0', port=port)
+        
+        if env == 'development':
+            print(f"Access at: https://localhost:{port}\n")
+            app.run(debug=debug, host='0.0.0.0', port=port, ssl_context='adhoc')
+        else:
+            print(f"Access at: http://localhost:{port}\n")
+            # ssl_context='adhoc' removed — production SSL is handled by the reverse proxy
+            app.run(debug=debug, host='0.0.0.0', port=port)
     else:
         print("\n[X] Cannot start - database connection failed")
         print("Please check your .env configuration")
