@@ -647,10 +647,10 @@ def get_crop_recommendations(county_id: int, county_name: str,
             })
 
         scored_crops.sort(key=lambda x: x['score'], reverse=True)
-        top_3 = scored_crops[:3]
+        top_5 = scored_crops[:5]
 
         recommendations = []
-        for idx, item in enumerate(top_3, 1):
+        for idx, item in enumerate(top_5, 1):
             row   = item['crop']
             score = item['score']
             notes = []
@@ -765,7 +765,7 @@ def get_alternative_recommendations(county: str, soil_ph: float, rainfall: str, 
         ORDER BY 
             ABS(%s - (cs.ph_optimal_min + cs.ph_optimal_max) / 2),
             ABS(%s - (cs.rain_optimal_min_mm + cs.rain_optimal_max_mm) / 2)
-        LIMIT 3
+        LIMIT 5
         """
         
         params = (
@@ -1558,7 +1558,7 @@ def admin_diseases():
                         d.severity,
                         d.description,
                         d.ai_label,
-                        GROUP_CONCAT(DISTINCT c.crop_name ORDER BY c.crop_name SEPARATOR ', ')
+                        STRING_AGG(DISTINCT c.crop_name, ', ')
                             AS affected_crops,
                         COUNT(DISTINCT t.treatment_id) AS treatment_count
                 FROM    diseases d
