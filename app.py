@@ -153,7 +153,7 @@ db_pool = None
 
 try:
     if DATABASE_URL:
-        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, DATABASE_URL, sslmode='require')
+        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, DATABASE_URL)
     else:
         db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, **DB_CONFIG)
     logger.info("PostgreSQL connection pool created successfully")
@@ -169,7 +169,7 @@ def get_db_connection():
         if db_pool:
             return db_pool.getconn()
         elif DATABASE_URL:
-            return psycopg2.connect(DATABASE_URL, sslmode='require')
+            return psycopg2.connect(DATABASE_URL)
         else:
             return psycopg2.connect(**DB_CONFIG)
     except Error as e:
