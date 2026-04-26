@@ -146,33 +146,51 @@ TEMPERATURE_RANGES = {
 # DATABASE CONNECTION FUNCTIONS
 # ============================================================================
 
+from psycopg2 import pool
+
+# Initialize the connection pool globally
+db_pool = None
+
+try:
+    if DATABASE_URL:
+        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, DATABASE_URL, sslmode='require')
+    else:
+        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, **DB_CONFIG)
+    logger.info("PostgreSQL connection pool created successfully")
+except Exception as e:
+    logger.error(f"Error creating connection pool: {e}")
+
+
 def get_db_connection():
     """
-    Create and return a database connection to crop_advisory (PostgreSQL).
-    Supports both DATABASE_URL (Railway) and individual env vars (local dev).
+    Get a database connection from the connection pool.
     """
     try:
-        if DATABASE_URL:
-            connection = psycopg2.connect(DATABASE_URL, sslmode='require')
+        if db_pool:
+            return db_pool.getconn()
+        elif DATABASE_URL:
+            return psycopg2.connect(DATABASE_URL, sslmode='require')
         else:
-            connection = psycopg2.connect(**DB_CONFIG)
-        return connection
+            return psycopg2.connect(**DB_CONFIG)
     except Error as e:
-        logger.error(f"Error connecting to PostgreSQL 'crop_advisory': {e}")
+        logger.error(f"Error getting connection from PostgreSQL pool: {e}")
         return None
 
 
 def close_db_connection(connection, cursor=None):
     """
-    Safely close database connection and cursor
+    Safely close the cursor and return the connection to the pool.
     """
     try:
         if cursor:
             cursor.close()
-        if connection and not connection.closed:
-            connection.close()
+        if connection:
+            if db_pool:
+                db_pool.putconn(connection)
+            elif not connection.closed:
+                connection.close()
     except Exception as e:
-        logger.error(f"Error closing database connection: {e}")
+        logger.error(f"Error returning database connection to pool: {e}")
 
 
 # ============================================================================
