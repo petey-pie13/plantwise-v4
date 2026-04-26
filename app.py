@@ -147,34 +147,40 @@ TEMPERATURE_RANGES = {
 # ============================================================================
 
 from psycopg2 import pool
+import threading
 
-# Initialize the connection pool globally
+# Initialize the connection pool globally (but lazily)
 db_pool = None
-
-try:
-    if DATABASE_URL:
-        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, DATABASE_URL)
-    else:
-        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, **DB_CONFIG)
-    logger.info("PostgreSQL connection pool created successfully")
-except Exception as e:
-    logger.error(f"Error creating connection pool: {e}")
-
+pool_lock = threading.Lock()
 
 def get_db_connection():
     """
     Get a database connection from the connection pool.
+    Initializes the pool lazily on the first request to prevent Gunicorn fork deadlocks.
     """
+    global db_pool
     try:
-        if db_pool:
-            return db_pool.getconn()
-        elif DATABASE_URL:
-            return psycopg2.connect(DATABASE_URL)
-        else:
-            return psycopg2.connect(**DB_CONFIG)
+        if db_pool is None:
+            with pool_lock:
+                # Double-check inside lock
+                if db_pool is None:
+                    if DATABASE_URL:
+                        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 15, DATABASE_URL)
+                    else:
+                        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 15, **DB_CONFIG)
+                    logger.info("PostgreSQL connection pool created successfully for this worker")
+        
+        return db_pool.getconn()
     except Error as e:
         logger.error(f"Error getting connection from PostgreSQL pool: {e}")
-        return None
+        # Emergency fallback
+        try:
+            if DATABASE_URL:
+                return psycopg2.connect(DATABASE_URL)
+            else:
+                return psycopg2.connect(**DB_CONFIG)
+        except:
+            return None
 
 
 def close_db_connection(connection, cursor=None):
