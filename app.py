@@ -165,9 +165,7 @@ def get_db_connection():
                 # Double-check inside lock
                 if db_pool is None:
                     if DATABASE_URL:
-                        # Railway's internal network drops SSL negotiations (causing hangs).
-                        # We MUST explicitly disable SSL to make it connect instantly.
-                        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 15, DATABASE_URL, sslmode='disable')
+                        db_pool = psycopg2.pool.ThreadedConnectionPool(1, 15, DATABASE_URL)
                     else:
                         db_pool = psycopg2.pool.ThreadedConnectionPool(1, 15, **DB_CONFIG)
                     logger.info("PostgreSQL connection pool created successfully for this worker")
@@ -178,7 +176,7 @@ def get_db_connection():
         # Emergency fallback
         try:
             if DATABASE_URL:
-                return psycopg2.connect(DATABASE_URL, sslmode='disable')
+                return psycopg2.connect(DATABASE_URL)
             else:
                 return psycopg2.connect(**DB_CONFIG)
         except Exception as inner_e:
