@@ -572,8 +572,13 @@ async function selectCountyDropdown(name, subCounty = '') {
  * Tries exact → contains → starts-with matching.
  */
 function selectSubCountyDropdown(name) {
+    if (!name) return;
+
     const select = document.getElementById('sub_county');
-    const lower  = name.toLowerCase().replace(/ division| sub.county/gi, '').trim();
+    const countyName = document.getElementById('county').value;
+    
+    // Clean name for matching
+    const lower = name.toLowerCase().replace(/ division| sub.county/gi, '').trim();
 
     let bestIdx = -1;
     for (let i = 1; i < select.options.length; i++) {   // skip placeholder
@@ -581,11 +586,29 @@ function selectSubCountyDropdown(name) {
         if (opt === lower)              { bestIdx = i; break; }          // exact
         if (opt.includes(lower) || lower.includes(opt)) { bestIdx = i; } // contains
     }
+
     if (bestIdx > 0) {
         select.selectedIndex = bestIdx;
-        console.log(`[GEO] Auto-selected sub-county: ${select.options[bestIdx].value}`);
+        console.log(`[GEO] Auto-selected existing sub-county: ${select.options[bestIdx].value}`);
     } else {
-        console.warn(`[GEO] No sub-county match for: "${name}"`);
+        // PER USER REQUIREMENT: Fill with detected result even if not in DB list
+        // Guard: Don't add if it's the same as the county name
+        if (name.toLowerCase() === countyName.toLowerCase()) {
+            console.warn(`[GEO] Detected sub-county identical to county ("${name}"), skipping add.`);
+            return;
+        }
+
+        console.log(`[GEO] No match in DB list, adding custom detected sub-county: "${name}"`);
+        
+        // Add new option
+        const newOpt = document.createElement('option');
+        newOpt.value = name;
+        newOpt.textContent = `${name} (Detected)`;
+        select.appendChild(newOpt);
+        
+        // Select it
+        select.value = name;
+        state.sub_county = name;
     }
 }
 

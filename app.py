@@ -2281,19 +2281,29 @@ def api_reverse_geocode():
             address.get('village')       or
             address.get('municipality')  or
             address.get('city_district') or
+            address.get('district')      or
             address.get('neighbourhood') or
+            address.get('quarter')       or
+            address.get('hamlet')        or
+            address.get('road')          or
+            address.get('isolated_dwelling') or
             ''
         )
 
         # Clean up county name
-        # Nominatim often returns "Nairobi City County" 
-        # or "Nakuru County"
         county = raw_county\
             .replace(' City County', '')\
             .replace(' County', '')\
             .strip()
 
         sub_county = raw_sub_county.strip()
+
+        # Ensure sub_county is not identical to county (per user requirement)
+        if sub_county.lower() == county.lower():
+            # Try a deeper fallback if they match
+            sub_county = address.get('road') or address.get('suburb') or ''
+            if sub_county.lower() == county.lower():
+                sub_county = ''
 
         print(f"[GEOCODE] Parsed county: '{county}', "
               f"sub-county: '{sub_county}'")
