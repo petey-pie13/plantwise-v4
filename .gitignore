@@ -43,6 +43,7 @@ error.txt
 
 # ── Database Dumps ────────────────────────────────────────────────────────────
 *.sql
+!migrations/*.sql
 *.dump
 
 # ── Dynamic Uploads & Audit Reports ──────────────────────────────────────────

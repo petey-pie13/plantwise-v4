@@ -8,6 +8,16 @@ let uploadedImages = [];
 const MAX_IMAGES = 3;
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
+function showToast(message, type = 'info') {
+    if (window.toast && typeof window.toast[type] === 'function') {
+        return window.toast[type](message);
+    }
+    if (window.toast && typeof window.toast.show === 'function') {
+        return window.toast.show(message, type);
+    }
+    console.log(`[Toast ${type}]: ${message}`);
+}
+
 /**
  * Initialize image upload functionality
  */

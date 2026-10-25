@@ -33,6 +33,12 @@ function hideLoading() {
  * Show toast notification
  */
 function showToast(message, type = 'info') {
+    if (window.toast && typeof window.toast[type] === 'function') {
+        return window.toast[type](message);
+    }
+    if (window.toast && typeof window.toast.show === 'function') {
+        return window.toast.show(message, type);
+    }
     const colors = {
         success: 'var(--success-green)',
         error: 'var(--error-red)',

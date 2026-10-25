@@ -32,31 +32,31 @@
             <!-- 1. Dashboard -->
             <a href="{{ url_for('user_dashboard') }}" class="sidebar-nav-item {% if request.endpoint == 'user_dashboard' %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i>
-                <span>Dashboard</span>
+                <span>{{ t.dashboard }}</span>
             </a>
 
             <!-- 2. My Farms -->
             <a href="{{ url_for('farm_list') }}" class="sidebar-nav-item {% if 'farm' in request.endpoint and 'calendar' not in request.endpoint %}active{% endif %}">
                 <i data-lucide="layers"></i>
-                <span>My Farms</span>
+                <span>{{ t.my_farms }}</span>
             </a>
 
             <!-- 3. Crops & Planning -->
             <a href="{{ url_for('advisory') }}" class="sidebar-nav-item {% if 'advisory' in request.endpoint or 'diagnosis' in request.endpoint %}active{% endif %}">
                 <i data-lucide="sprout"></i>
-                <span>Crops & Planning</span>
+                <span>{{ t.crops_planning }}</span>
             </a>
 
             <!-- 4. Marketplace -->
             <a href="{{ url_for('marketplace') }}" class="sidebar-nav-item {% if 'marketplace' in request.endpoint or 'listing' in request.endpoint or 'order' in request.endpoint %}active{% endif %}">
                 <i data-lucide="shopping-bag"></i>
-                <span>Marketplace</span>
+                <span>{{ t.marketplace }}</span>
             </a>
 
             <!-- 5. AI Assistant -->
             <a href="{{ url_for('assistant_home') }}" class="sidebar-nav-item {% if 'assistant' in request.endpoint %}active{% endif %}">
                 <i data-lucide="sparkles"></i>
-                <span>AI Assistant</span>
+                <span>{{ t.ai_assistant }}</span>
             </a>
 
             <!-- 6. Calendar -->
@@ -68,13 +68,13 @@
             <!-- 7. Weather -->
             <a href="{{ url_for('weather_alerts_view') }}" class="sidebar-nav-item {% if 'weather' in request.endpoint %}active{% endif %}">
                 <i data-lucide="cloud-sun"></i>
-                <span>Weather</span>
+                <span>{{ t.weather_alerts }}</span>
             </a>
 
             <!-- 8. Knowledge Base -->
             <a href="{{ url_for('resources') }}" class="sidebar-nav-item {% if 'resources' in request.endpoint %}active{% endif %}">
                 <i data-lucide="book-open"></i>
-                <span>Knowledge Base</span>
+                <span>{{ t.resources }}</span>
             </a>
 
             <!-- 9. Settings -->
@@ -118,6 +118,9 @@
             </div>
 
             <div class="topbar-actions">
+                <a href="{{ url_for('set_language', lang=t.other_lang) }}" class="topbar-icon-btn topbar-lang-pill" title="Switch language to {{ t.other_lang_name }}" aria-label="Switch language">
+                    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">{{ 'SW' if current_lang == 'en' else 'EN' }}</span>
+                </a>
                 <button type="button" class="topbar-icon-btn" title="Notifications" aria-label="Notifications" onclick="if(window.toast) toast.info('No unread notifications.');">
                     <i data-lucide="bell"></i>
                     <span class="notif-badge-dot"></span>
@@ -157,6 +160,30 @@
 
             {% block content %}{% endblock %}
         </main>
+
+        <!-- Mobile Bottom Navigation Bar (Screens <= 900px) -->
+        <nav class="app-mobile-bottom-nav" aria-label="Mobile Navigation">
+            <a href="{{ url_for('user_dashboard') }}" class="mobile-nav-link {% if request.endpoint == 'user_dashboard' %}active{% endif %}" title="Dashboard">
+                <i data-lucide="layout-dashboard"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('advisory') }}" class="mobile-nav-link {% if 'advisory' in request.endpoint %}active{% endif %}" title="Crops Advisory">
+                <i data-lucide="sprout"></i>
+                <span>Advisory</span>
+            </a>
+            <a href="{{ url_for('diagnosis') }}" class="mobile-nav-link {% if 'diagnosis' in request.endpoint %}active{% endif %}" title="Disease Diagnosis">
+                <i data-lucide="scan-line"></i>
+                <span>Diagnosis</span>
+            </a>
+            <a href="{{ url_for('marketplace') }}" class="mobile-nav-link {% if 'marketplace' in request.endpoint or 'listing' in request.endpoint or 'order' in request.endpoint %}active{% endif %}" title="Marketplace">
+                <i data-lucide="shopping-bag"></i>
+                <span>Market</span>
+            </a>
+            <a href="{{ url_for('assistant_home') }}" class="mobile-nav-link {% if 'assistant' in request.endpoint %}active{% endif %}" title="AI Assistant">
+                <i data-lucide="sparkles"></i>
+                <span>Assistant</span>
+            </a>
+        </nav>
     </div>
 </div>
 

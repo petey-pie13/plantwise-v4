@@ -521,9 +521,67 @@ button, input, select, textarea {
     border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Mobile Bottom Navigation Bar */
+.app-mobile-bottom-nav {
+    display: none;
+}
+
 @media (max-width: 900px) {
     .app-sidebar {
         display: none;
+    }
+
+    .app-mobile-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: #ffffff;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+        z-index: 1000;
+        align-items: center;
+        justify-content: space-around;
+        padding-bottom: env(safe-area-inset-bottom, 4px);
+    }
+
+    .mobile-nav-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        height: 100%;
+        min-height: 48px;
+        min-width: 48px;
+        color: #64748b;
+        text-decoration: none;
+        font-size: 11px;
+        font-weight: 500;
+        gap: 3px;
+        transition: color 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-nav-link svg {
+        width: 22px;
+        height: 22px;
+        stroke-width: 2px;
+    }
+
+    .mobile-nav-link.active {
+        color: #1b4332;
+        font-weight: 700;
+    }
+
+    .mobile-nav-link.active svg {
+        stroke: #1b4332;
+    }
+
+    .app-main-canvas {
+        padding-bottom: 74px;
     }
 }
 
@@ -2294,4 +2352,23 @@ button, input, select, textarea {
 .btn-outline:hover {
     border-color: var(--primary-green);
     color: var(--primary-green);
+}
+
+/* ─── Mobile Tap Targets & Responsiveness (WCAG 2.1 AA >= 44px) ─ */
+@media (max-width: 900px) {
+    .btn,
+    button,
+    input[type="submit"],
+    input[type="button"],
+    .topbar-icon-btn,
+    .topbar-avatar-btn,
+    .mobile-nav-link,
+    .btn-sidebar-logout {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    input, select, textarea {
+        font-size: 16px !important;
+    }
 }

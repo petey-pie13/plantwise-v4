@@ -5,6 +5,16 @@
 
 let selectedMethod = null;
 
+function showToast(message, type = 'info') {
+    if (window.toast && typeof window.toast[type] === 'function') {
+        return window.toast[type](message);
+    }
+    if (window.toast && typeof window.toast.show === 'function') {
+        return window.toast.show(message, type);
+    }
+    console.log(`[Toast ${type}]: ${message}`);
+}
+
 /**
  * Select diagnosis method
  */

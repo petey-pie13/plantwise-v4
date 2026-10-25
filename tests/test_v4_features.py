@@ -331,6 +331,66 @@ class PlantWiseV4FeatureTests(unittest.TestCase):
         self.assertTrue(wdata.get('success', False))
         self.assertTrue(len(wdata.get('alerts', [])) > 0)
 
+    # ── STAGE 7: LOCALIZATION, CACHING & SANITIZED CONTRACTS ─────────────────
+
+    def test_11_localization_and_language_toggle(self):
+        """User can toggle between English and Kiswahili with localized labels."""
+        client = app.test_client()
+        email = f"lang_{self.run_id}@example.com"
+        self._register(client, "Wanjiku Njoroge", email, "0799000001", "farmer")
+
+        # Switch to Kiswahili
+        sw_res = client.get('/set-language/sw', follow_redirects=True)
+        self.assertEqual(sw_res.status_code, 200)
+        self.assertIn(b"Dashibodi", sw_res.data)
+        self.assertIn(b"Mashamba Yangu", sw_res.data)
+
+        # Switch back to English
+        en_res = client.get('/set-language/en', follow_redirects=True)
+        self.assertEqual(en_res.status_code, 200)
+        self.assertIn(b"Dashboard", en_res.data)
+        self.assertIn(b"My Farms", en_res.data)
+
+    def test_12_reference_data_caching(self):
+        """Counties and crops are cached in-memory with sub-millisecond retrieval."""
+        from app import get_all_counties, get_all_crops, get_sub_counties_by_county, _REF_CACHE
+
+        counties_first = get_all_counties()
+        self.assertTrue(len(counties_first) >= 47)
+        self.assertIsNotNone(_REF_CACHE['counties']['data'])
+
+        # Second call must return cached list
+        counties_second = get_all_counties()
+        self.assertEqual(counties_first, counties_second)
+
+        # Crops cache
+        crops_first = get_all_crops()
+        self.assertTrue(len(crops_first) > 0)
+        self.assertIsNotNone(_REF_CACHE['crops']['data'])
+
+        # Sub-counties cache
+        sub_first = get_sub_counties_by_county('Nakuru')
+        self.assertTrue(len(sub_first) > 0)
+        self.assertIn('nakuru', _REF_CACHE['sub_counties'])
+
+    def test_13_security_error_contract_and_zero_leaks(self):
+        """Error responses adhere to sanitized contract and leak no stack traces."""
+        client = app.test_client()
+
+        # 404 Not Found returns friendly error page without debug trace
+        not_found_res = client.get('/this-path-definitely-does-not-exist')
+        self.assertEqual(not_found_res.status_code, 404)
+        self.assertNotIn(b"Traceback", not_found_res.data)
+        self.assertNotIn(b"psycopg2", not_found_res.data)
+
+        # API error contract returns clean JSON
+        api_err_res = client.post('/api/recommendations', data='bad payload', content_type='application/json')
+        self.assertIn(api_err_res.status_code, (400, 422))
+        err_data = json.loads(api_err_res.data)
+        self.assertIn('message', err_data)
+        self.assertNotIn('Traceback', err_data.get('message', ''))
+        self.assertNotIn('SQL', err_data.get('message', ''))
+
 
 if __name__ == '__main__':
     unittest.main()

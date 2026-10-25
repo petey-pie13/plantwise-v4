@@ -16,6 +16,8 @@ import psycopg2.extras
 from psycopg2 import OperationalError as Error
 import os
 import uuid
+import time
+import threading
 from datetime import timedelta
 from dotenv import load_dotenv
 from typing import List, Dict, Optional
@@ -24,6 +26,7 @@ import requests
 import base64
 from io import BytesIO
 from functools import wraps
+from PIL import Image, ImageOps
 
 # ---------------------------------------------------------------------------
 # Structured logging — replaces all print() calls for server-side visibility
@@ -463,33 +466,54 @@ def calculate_suitability_score(soil_ph: float, rainfall_mm: int, temp_c: int,
 
 
 # ============================================================================
-# CROP ADVISORY FUNCTIONS
+# CROP ADVISORY FUNCTIONS & IN-MEMORY REFERENCE CACHE
 # ============================================================================
+
+_REF_CACHE_LOCK = threading.Lock()
+_REF_CACHE = {
+    'counties': {'data': None, 'expires_at': 0},
+    'crops': {'data': None, 'expires_at': 0},
+    'sub_counties': {}  # {county_lower: {'data': [...], 'expires_at': 0}}
+}
+_REF_CACHE_TTL = 3600  # 1 hour TTL for static geographical and agronomic taxonomies
+
 
 def get_all_counties() -> List[str]:
     """
-    Fetch all counties from kenya_counties table
+    Fetch all counties from kenya_counties table with in-memory caching
     
     Returns:
         List of county names sorted alphabetically
     """
+    now = time.time()
+    with _REF_CACHE_LOCK:
+        cached = _REF_CACHE['counties']
+        if cached['data'] is not None and now < cached['expires_at']:
+            return list(cached['data'])
+
     connection = get_db_connection()
     if not connection:
-        print("Failed to connect to database")
+        logger.error("Failed to connect to database in get_all_counties")
+        with _REF_CACHE_LOCK:
+            if _REF_CACHE['counties']['data'] is not None:
+                return list(_REF_CACHE['counties']['data'])
         return []
     
+    cursor = None
     try:
         cursor = connection.cursor()
-        
         query = "SELECT county_name FROM kenya_counties ORDER BY county_name ASC"
         cursor.execute(query)
         counties = [row[0] for row in cursor.fetchall()]
         
-        print(f"[OK] Loaded {len(counties)} counties from database")
+        with _REF_CACHE_LOCK:
+            _REF_CACHE['counties']['data'] = counties
+            _REF_CACHE['counties']['expires_at'] = now + _REF_CACHE_TTL
+
         return counties
         
     except Error as e:
-        print(f"Error fetching counties: {e}")
+        logger.error(f"Error fetching counties: {e}")
         return []
     finally:
         close_db_connection(connection, cursor)
@@ -497,28 +521,40 @@ def get_all_counties() -> List[str]:
 
 def get_all_crops() -> List[str]:
     """
-    Fetch all crops from crops table
+    Fetch all crops from crops table with in-memory caching
     
     Returns:
         List of crop names sorted alphabetically
     """
+    now = time.time()
+    with _REF_CACHE_LOCK:
+        cached = _REF_CACHE['crops']
+        if cached['data'] is not None and now < cached['expires_at']:
+            return list(cached['data'])
+
     connection = get_db_connection()
     if not connection:
-        print("Failed to connect to database")
+        logger.error("Failed to connect to database in get_all_crops")
+        with _REF_CACHE_LOCK:
+            if _REF_CACHE['crops']['data'] is not None:
+                return list(_REF_CACHE['crops']['data'])
         return []
     
+    cursor = None
     try:
         cursor = connection.cursor()
-        
         query = "SELECT crop_name FROM crops ORDER BY crop_name ASC"
         cursor.execute(query)
         crops = [row[0] for row in cursor.fetchall()]
         
-        print(f"[OK] Loaded {len(crops)} crops from database")
+        with _REF_CACHE_LOCK:
+            _REF_CACHE['crops']['data'] = crops
+            _REF_CACHE['crops']['expires_at'] = now + _REF_CACHE_TTL
+
         return crops
         
     except Error as e:
-        print(f"Error fetching crops: {e}")
+        logger.error(f"Error fetching crops: {e}")
         return []
     finally:
         close_db_connection(connection, cursor)
@@ -526,7 +562,7 @@ def get_all_crops() -> List[str]:
 
 def get_sub_counties_by_county(county: str) -> List[str]:
     """
-    Fetch sub-counties for a specific county from sub_counties table
+    Fetch sub-counties for a specific county from sub_counties table with in-memory caching
     
     Args:
         county: County name to filter by
@@ -534,30 +570,44 @@ def get_sub_counties_by_county(county: str) -> List[str]:
     Returns:
         List of sub-county names sorted alphabetically
     """
+    if not county:
+        return []
+
+    c_key = county.strip().lower()
+    now = time.time()
+    with _REF_CACHE_LOCK:
+        cached = _REF_CACHE['sub_counties'].get(c_key)
+        if cached is not None and cached['data'] is not None and now < cached['expires_at']:
+            return list(cached['data'])
+
     connection = get_db_connection()
     if not connection:
-        print("Failed to connect to database")
+        logger.error("Failed to connect to database in get_sub_counties_by_county")
         return []
     
+    cursor = None
     try:
         cursor = connection.cursor()
-        
-        # JOIN with kenya_counties to match county name to county_id
         query = """
             SELECT sc.sub_county_name 
             FROM sub_counties sc
             INNER JOIN kenya_counties kc ON sc.county_id = kc.county_id
-            WHERE kc.county_name = %s 
+            WHERE LOWER(kc.county_name) = LOWER(%s)
             ORDER BY sc.sub_county_name ASC
         """
         cursor.execute(query, (county,))
         sub_counties = [row[0] for row in cursor.fetchall()]
         
-        print(f"[OK] Loaded {len(sub_counties)} sub-counties for {county}")
+        with _REF_CACHE_LOCK:
+            _REF_CACHE['sub_counties'][c_key] = {
+                'data': sub_counties,
+                'expires_at': now + _REF_CACHE_TTL
+            }
+
         return sub_counties
         
     except Error as e:
-        print(f"Error fetching sub-counties: {e}")
+        logger.error(f"Error fetching sub-counties: {e}")
         return []
     finally:
         close_db_connection(connection, cursor)
@@ -1083,9 +1133,89 @@ def inject_user():
     return {'current_user': get_current_user(), 'user': get_current_user()}
 
 
+@app.context_processor
+def inject_localization():
+    """Inject language dictionary for English & Kiswahili localization."""
+    current_lang = session.get('lang', 'en')
+    translations = {
+        'en': {
+            'dashboard': 'Dashboard',
+            'my_farms': 'My Farms',
+            'crops_planning': 'Crops & Planning',
+            'marketplace': 'Marketplace',
+            'ai_assistant': 'AI Assistant',
+            'advisory': 'Crop Advisory',
+            'diagnosis': 'Crop Diagnosis',
+            'weather_alerts': 'Weather Alerts',
+            'resources': 'Resources',
+            'profile': 'Profile',
+            'sign_out': 'Sign Out',
+            'welcome': 'Welcome',
+            'search_placeholder': 'Search crops, diseases, or get advice...',
+            'lang_name': 'English',
+            'other_lang': 'sw',
+            'other_lang_name': 'Kiswahili',
+        },
+        'sw': {
+            'dashboard': 'Dashibodi',
+            'my_farms': 'Mashamba Yangu',
+            'crops_planning': 'Mazao na Mipango',
+            'marketplace': 'Soko la Mazao',
+            'ai_assistant': 'Msaidizi wa AI',
+            'advisory': 'Ushauri wa Mazao',
+            'diagnosis': 'Utambuzi wa Magonjwa',
+            'weather_alerts': 'Tahadhari za Hewa',
+            'resources': 'Mwongozo na Rasilimali',
+            'profile': 'Wasifu Wangu',
+            'sign_out': 'Toka',
+            'welcome': 'Karibu',
+            'search_placeholder': 'Tafuta mazao, magonjwa, au pata ushauri...',
+            'lang_name': 'Kiswahili',
+            'other_lang': 'en',
+            'other_lang_name': 'English',
+        }
+    }
+    return {
+        'current_lang': current_lang,
+        't': translations.get(current_lang, translations['en'])
+    }
+
+
 # ============================================================================
 # FLASK ROUTES
 # ============================================================================
+
+@app.route('/set-language/<lang>')
+def set_language(lang):
+    """Toggle language between English and Kiswahili"""
+    if lang in ('en', 'sw'):
+        session['lang'] = lang
+    next_url = request.referrer or url_for('user_dashboard')
+    if not next_url.startswith('/') or next_url.startswith('//'):
+        next_url = url_for('user_dashboard')
+    return redirect(next_url)
+
+
+@app.route('/healthz')
+def healthz():
+    """Liveness & readiness probe for load balancers and orchestrators"""
+    db_ok = False
+    conn = get_db_connection()
+    cur = None
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            db_ok = bool(cur.fetchone())
+        except Exception as e:
+            logger.error(f"Healthcheck DB query failed: {e}")
+        finally:
+            close_db_connection(conn, cur)
+    
+    if db_ok:
+        return jsonify({'status': 'healthy', 'db': 'connected'}), 200
+    return jsonify({'status': 'unhealthy', 'db': 'disconnected'}), 503
+
 
 @app.route('/')
 def index():
@@ -2695,13 +2825,24 @@ def api_diagnose():
                 os.makedirs(uploads_dir, exist_ok=True)
                 img = uploaded_images[0]
                 img.seek(0)
-                img_data = img.read()
+                
+                # Sanitize image: strip EXIF GPS/device metadata, normalize orientation, optimize
+                pil_img = Image.open(img)
+                pil_img = ImageOps.exif_transpose(pil_img)
+                if pil_img.mode in ('RGBA', 'P'):
+                    pil_img = pil_img.convert('RGB')
+                
+                # Cap maximum dimension to 1280px for mobile performance
+                max_dim = 1280
+                if max(pil_img.size) > max_dim:
+                    pil_img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                
                 filename = f"diag_{uuid.uuid4().hex[:8]}.jpg"
-                with open(os.path.join(uploads_dir, filename), 'wb') as f:
-                    f.write(img_data)
+                filepath = os.path.join(uploads_dir, filename)
+                pil_img.save(filepath, format='JPEG', quality=85, optimize=True)
                 image_url = f"/static/uploads/{filename}"
             except Exception as e:
-                print(f"Could not save diagnosis image: {e}")
+                logger.warning(f"Could not sanitize/save diagnosis image: {e}")
         
         _session_ref = str(uuid.uuid4())[:16]
 
