@@ -2565,99 +2565,76 @@ button, input, select, textarea {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-xl);
-    border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: var(--radius-md, 8px);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
-    transition: all var(--transition-base);
+    transition: all 0.15s ease;
     text-decoration: none;
-    min-width: 200px;
-    position: relative;
-    overflow: hidden;
-    letter-spacing: -0.01em;
-}
-
-/* Glossy shine effect on buttons */
-.btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: var(--shine-gradient);
-    transition: left var(--transition-slow);
-}
-
-.btn:hover::before {
-    left: 100%;
+    border: 1px solid transparent;
+    line-height: 1.4;
+    box-sizing: border-box;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-    color: var(--primary-green);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(45, 95, 79, 0.1);
+    background-color: var(--primary-green, #0e7a46) !important;
+    color: #ffffff !important;
+    border-color: var(--primary-green, #0e7a46) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    background-color: var(--primary-green-dark, #0b6638) !important;
+    border-color: var(--primary-green-dark, #0b6638) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
 }
 
 .btn-primary:active {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(0);
 }
 
 .btn-secondary {
-    background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-light) 100%);
-    color: white;
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    background-color: #f1f5f1;
+    color: var(--text-primary, #0f172a);
+    border: 1px solid var(--border-color, #e2e8e0);
 }
 
 .btn-secondary:hover {
-    background: linear-gradient(135deg, var(--accent-green-light) 0%, var(--accent-green) 100%);
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    background-color: #e2e8e2;
+    color: var(--text-primary, #0f172a);
 }
 
-.btn-secondary:active {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary, #475569);
+    border: 1px solid var(--border-color, #e2e8e0);
 }
 
-.btn-success {
-    background-color: var(--primary-green);
-    color: white;
-    box-shadow: var(--shadow-md);
+.btn-ghost:hover {
+    background: #f1f5f1;
+    color: var(--text-primary, #0f172a);
+    border-color: #cbd5e1;
 }
 
-.btn-success:hover {
-    background-color: var(--primary-green-dark);
+.btn-sm {
+    padding: 6px 14px !important;
+    font-size: 13px !important;
 }
 
-.btn-outline {
-    background-color: transparent;
-    border: 2px solid var(--border-color);
-    color: var(--text-dark);
-}
-
-.btn-outline:hover {
-    border-color: var(--primary-green);
-    background-color: var(--bg-light);
+.btn-lg {
+    padding: 12px 28px !important;
+    font-size: 15px !important;
 }
 
 .btn:disabled {
-    opacity: 0.5;
+    opacity: 0.55;
     cursor: not-allowed;
-}
-
-.btn:disabled:hover {
-    transform: none;
+    transform: none !important;
 }
 
 /* ============================================================================
@@ -2875,42 +2852,205 @@ button, input, select, textarea {
 }
 
 /* ============================================================================
-   Forms & Inputs
+   Forms & Inputs — Unified Modern Design System
    ============================================================================ */
 
-.form-group {
-    margin-bottom: var(--spacing-xl);
+/* Page Headers for Form & Resource Views */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
+.page-header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-primary, #0f172a);
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.page-header p {
+    font-size: 14px;
+    color: var(--text-muted, #64748b);
+    margin: 4px 0 0 0;
+}
+
+/* Master Form Card Container */
+.form-card {
+    background: #ffffff;
+    border: 1px solid var(--border-color, #e2e8e0);
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+    padding: 32px 36px;
+    max-width: 840px;
+    margin: 16px 0 36px 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    .form-card {
+        padding: 22px 18px;
+        border-radius: var(--radius-md, 8px);
+        margin: 12px 0 24px 0;
+    }
+}
+
+/* Form Responsive Grid */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 24px;
+}
+
+@media (max-width: 680px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
+.form-group-full {
+    grid-column: 1 / -1;
+}
+
+/* Form Group & Label Hierarchy */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 18px;
+    box-sizing: border-box;
+}
+
+.form-grid .form-group {
+    margin-bottom: 0;
+}
+
+.form-group label,
 .form-label {
     display: block;
-    font-weight: 500;
-    color: var(--text-dark);
-    margin-bottom: var(--spacing-sm);
-    font-size: var(--font-size-base);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary, #0f172a);
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    margin: 0;
 }
 
+/* Input, Select, Textarea Styling */
 .form-input,
-.form-select {
+.form-select,
+.form-control,
+.form-group input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.form-group select,
+.form-group textarea,
+.form-card input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.form-card select,
+.form-card textarea,
+.auth-form input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.auth-form select,
+.auth-form textarea,
+.data-card input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.data-card select,
+.data-card textarea {
     width: 100%;
-    padding: var(--spacing-md);
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-base);
-    font-family: var(--font-family);
-    transition: all var(--transition-fast);
-    background-color: var(--bg-white);
-}
-
-.form-input:focus,
-.form-select:focus {
+    padding: 10.5px 14px;
+    border: 1.5px solid var(--border-color, #e2e8e0);
+    border-radius: var(--radius-md, 8px);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text-primary, #0f172a);
+    background-color: #ffffff;
+    box-sizing: border-box;
     outline: none;
-    border-color: var(--primary-green);
-    box-shadow: 0 0 0 3px rgba(45, 95, 79, 0.1);
+    line-height: 1.45;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
-.form-input::placeholder {
-    color: var(--text-light);
+/* Focus States */
+.form-input:focus,
+.form-select:focus,
+.form-control:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus,
+.form-card input:focus,
+.form-card select:focus,
+.form-card textarea:focus,
+.auth-form input:focus,
+.auth-form select:focus,
+.auth-form textarea:focus,
+.data-card input:focus,
+.data-card select:focus,
+.data-card textarea:focus {
+    border-color: var(--primary-green, #0e7a46) !important;
+    box-shadow: 0 0 0 3px rgba(14, 122, 70, 0.12) !important;
+    background-color: #ffffff !important;
+}
+
+/* Placeholders */
+.form-input::placeholder,
+.form-control::placeholder,
+.form-group input::placeholder,
+.form-group textarea::placeholder,
+.form-card input::placeholder,
+.form-card textarea::placeholder,
+.auth-form input::placeholder,
+.auth-form textarea::placeholder,
+.data-card input::placeholder,
+.data-card textarea::placeholder {
+    color: var(--text-light, #94a3b8);
+    font-size: 13.5px;
+}
+
+/* Select Dropdown Arrow */
+.form-select,
+select.form-input,
+select.form-control,
+.form-group select,
+.form-card select,
+.auth-form select,
+.data-card select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 38px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+}
+
+/* Textarea Height */
+.form-group textarea,
+.form-card textarea,
+.auth-form textarea,
+.data-card textarea {
+    min-height: 105px;
+    resize: vertical;
+}
+
+/* Form Helper Texts */
+.form-group span.help-text,
+.form-group span.hint {
+    font-size: 12px;
+    color: var(--text-muted, #64748b);
+    margin-top: 2px;
+}
+
+/* Form Actions Button Bar */
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border-subtle, #edf2ed);
 }
 
 /* ============================================================================
