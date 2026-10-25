@@ -56,13 +56,8 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 OPENROUTER_MODELS = [
-    'meta-llama/llama-3.2-11b-vision-instruct:free', # High availability free vision
-    'qwen/qwen2.5-vl-72b-instruct:free',             # Best vision quality, free
-    'qwen/qwen2.5-vl-32b-instruct:free',             # Slightly smaller, still excellent
-    'google/gemini-2.0-flash-exp:free',              # Multimodal speed
-    'moonshotai/kimi-vl-a3b-thinking:free',          # Vision + reasoning
-    'mistralai/mistral-small-3.1-24b-instruct:free', # Proven vision support
-    'openrouter/auto',                               # Smart fallback router
+    'openrouter/auto',                               # Smart auto-routing to best active free vision model
+    'nvidia/nemotron-3.5-super-vl:free',             # Fallback multimodal vision + language
 ]
 
 app = Flask(__name__,
@@ -978,9 +973,9 @@ Rules:
                     json={
                         'model': model,
                         'messages': [{'role': 'user', 'content': message_content}],
-                        'max_tokens': 1200
+                        'max_tokens': 2000
                     },
-                    timeout=30  # Reduced from 60s — fail fast and try next model
+                    timeout=45
                 )
 
                 data = response.json()
@@ -990,7 +985,8 @@ Rules:
                     print(f"[OpenRouter] {model} failed: {last_error}")
                     continue
 
-                raw_text = data['choices'][0]['message']['content']
+                msg = data['choices'][0]['message']
+                raw_text = msg.get('content') or msg.get('reasoning') or ''
 
                 if not raw_text:
                     print(f"[OpenRouter] {model} returned empty content - skipping")
@@ -998,21 +994,40 @@ Rules:
 
                 raw_text = raw_text.strip()
 
-                # Strip markdown fences if present
-                if raw_text.startswith("```"):
-                    raw_text = raw_text.split("```")[1]
-                    if raw_text.startswith("json"):
-                        raw_text = raw_text[4:]
-                    raw_text = raw_text.strip()
+                if '<think>' in raw_text and '</think>' in raw_text:
+                    import re
+                    raw_text = re.sub(r'<think>.*?</think>', '', raw_text, flags=re.DOTALL).strip()
 
-                parsed = json.loads(raw_text)
+                # Extract markdown JSON block if present
+                if "```" in raw_text:
+                    import re
+                    json_blocks = re.findall(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_text)
+                    if json_blocks:
+                        raw_text = json_blocks[0].strip()
+                    else:
+                        raw_text = raw_text.split("```")[1]
+                        if raw_text.startswith("json"):
+                            raw_text = raw_text[4:]
+                        raw_text = raw_text.strip()
+
+                try:
+                    parsed = json.loads(raw_text)
+                except Exception:
+                    first_brace = raw_text.find('{')
+                    last_brace = raw_text.rfind('}')
+                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                        parsed = json.loads(raw_text[first_brace:last_brace+1])
+                    else:
+                        raise
                 is_healthy      = parsed.get('is_healthy', False)
                 raw_diseases    = parsed.get('diseases', [])
                 observed_syms   = parsed.get('observed_symptoms', '')
+                if isinstance(observed_syms, list):
+                    observed_syms = "; ".join(str(s) for s in observed_syms)
                 affected_part   = parsed.get('affected_part', '')
                 img_quality     = parsed.get('image_quality', 'good')
 
-                print(f"[OpenRouter] {model} responded. Symptoms: {observed_syms[:80]}")
+                print(f"[OpenRouter] {model} responded. Symptoms: {str(observed_syms)[:80]}")
 
                 diseases = []
                 for d in raw_diseases[:4]:
@@ -2775,7 +2790,7 @@ def api_diagnose():
                 return jsonify({'success': False, 'error': 'Invalid file type. Only JPEG, PNG, WebP, and GIF images are accepted.'}), 400
 
         # ── Route to correct diagnosis engine ────────────────────────────
-        if uploaded_images and method == 'hybrid':
+        if uploaded_images and method in ('hybrid', 'photo', 'image'):
             
             # Fetch KB diseases first — these inform the AI what to look for
             kb_results = get_knowledge_base_results(crop)
@@ -2819,7 +2834,7 @@ def api_diagnose():
         
         # Save image to static folder instead of bloating the session cookie
         image_url = None
-        if uploaded_images and method == 'hybrid':
+        if uploaded_images and method in ('hybrid', 'photo', 'image'):
             try:
                 uploads_dir = os.path.join(app.static_folder, 'uploads')
                 os.makedirs(uploads_dir, exist_ok=True)
@@ -4554,10 +4569,13 @@ def assistant_chat_api():
         else:
             assistant_reply = None
             text_models = [
-                'meta-llama/llama-3.3-70b-instruct:free',
-                'meta-llama/llama-3.1-8b-instruct:free',
-                'google/gemma-3-27b-it:free',
-                'qwen/qwen3-8b:free',
+                'nvidia/nemotron-3.5-lightning:free',
+                'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+                'nvidia/nemotron-3-super-120b-a12b:free',
+                'google/gemma-4-31b-it:free',
+                'google/gemma-4-26b-a4b-it:free',
+                'liquid/lfm-2.5-2.6b:free',
+                'openrouter/auto',
             ]
             for model in text_models:
                 try:
@@ -4565,13 +4583,19 @@ def assistant_chat_api():
                         OPENROUTER_API_URL,
                         headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}',
                                  'Content-Type': 'application/json'},
-                        json={'model': model, 'messages': messages_payload, 'max_tokens': 800},
-                        timeout=25
+                        json={'model': model, 'messages': messages_payload, 'max_tokens': 1500},
+                        timeout=30
                     )
                     rdata = resp.json()
                     if 'choices' in rdata and rdata['choices']:
-                        assistant_reply = rdata['choices'][0]['message']['content']
-                        break
+                        msg = rdata['choices'][0].get('message', {})
+                        assistant_reply = msg.get('content') or msg.get('reasoning')
+                        if assistant_reply:
+                            assistant_reply = assistant_reply.strip()
+                            if '<think>' in assistant_reply and '</think>' in assistant_reply:
+                                import re
+                                assistant_reply = re.sub(r'<think>.*?</think>', '', assistant_reply, flags=re.DOTALL).strip()
+                            break
                 except Exception as model_err:
                     logger.warning(f"Assistant model {model} error: {model_err}")
                     continue
