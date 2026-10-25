@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Disease Diagnosis - PlantWise</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/toast.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=4.0.1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/toast.css') }}?v=4.0.1">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
@@ -16,7 +16,7 @@
     <header class="header">
         <div class="header-container">
             <div class="logo-container">
-                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon" width="44" height="44">
                 <div class="logo-text">
                     <h1>PlantWise</h1>
                     <p>Crop Advisory & Diagnostics System</p>

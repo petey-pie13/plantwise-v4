@@ -485,3 +485,67 @@
     .crop-card-image-wrapper { height: 180px; }
     .crop-tech-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ─── Header & Brand Icon for Advisory, Diagnosis & Utility Pages ─ */
+.header {
+    background-color: #0b261a;
+    color: #ffffff;
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-icon {
+    width: 44px !important;
+    height: 44px !important;
+    max-width: 44px !important;
+    max-height: 44px !important;
+    border-radius: 8px;
+    object-fit: contain;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.logo-text h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.logo-text p {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+}
+
+.admin-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.admin-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
