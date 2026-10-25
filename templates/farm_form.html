@@ -1,0 +1,70 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}{% if farm %}Edit Farm{% else %}New Farm{% endif %} - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>{% if farm %}Edit Farm: {{ farm.name }}{% else %}Add New Farm{% endif %}</h1></div>
+    <a href="{{ url_for('farm_list') }}" class="btn btn-ghost btn-sm">← Back to Farms</a>
+</div>
+<div class="form-card">
+    <form method="POST" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+            <div class="form-group form-group-full">
+                <label>Farm Name *</label>
+                <input type="text" name="name" value="{{ farm.name if farm else '' }}" required placeholder="e.g. Kamau Maize Farm">
+            </div>
+            <div class="form-group">
+                <label>Total Area (hectares)</label>
+                <input type="number" name="total_area_ha" step="0.01" min="0" value="{{ farm.total_area_ha if farm else '' }}" placeholder="e.g. 2.5">
+            </div>
+            <div class="form-group">
+                <label>Soil pH</label>
+                <input type="number" name="soil_ph" step="0.1" min="0" max="14" value="{{ farm.soil_ph if farm else '' }}" placeholder="e.g. 6.5">
+            </div>
+            <div class="form-group">
+                <label>County</label>
+                <select name="county_id" id="county_id">
+                    <option value="">-- Select County --</option>
+                    {% for c in counties %}
+                    <option value="{{ c.county_id }}" {% if farm and farm.county_id == c.county_id %}selected{% endif %}>{{ c.county_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Sub-County</label>
+                <select name="sub_county_id" id="sub_county_id">
+                    <option value="">-- Select Sub-County --</option>
+                </select>
+            </div>
+            <div class="form-group form-group-full">
+                <label>Notes</label>
+                <textarea name="notes" placeholder="Any additional notes about this farm...">{{ farm.notes if farm else '' }}</textarea>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{% if farm %}Save Changes{% else %}Create Farm{% endif %}</button>
+            <a href="{{ url_for('farm_list') }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+document.getElementById('county_id').addEventListener('change', function() {
+    const cid = this.value;
+    const ssc = document.getElementById('sub_county_id');
+    ssc.innerHTML = '<option value="">-- Select Sub-County --</option>';
+    if (!cid) return;
+    fetch('/api/sub-counties?county_id=' + cid)
+        .then(r => r.json())
+        .then(data => {
+            (data.sub_counties || []).forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.sub_county_id;
+                opt.textContent = s.sub_county_name;
+                ssc.appendChild(opt);
+            });
+        });
+});
+</script>
+{% endblock %}

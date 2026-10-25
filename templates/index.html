@@ -1,155 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="PlantWise - AI-Powered Crop Advisory and Disease Diagnosis System">
-    <title>PlantWise - Smart Farming Solutions</title>
+    <meta name="description" content="PlantWise - AI-driven insights, local expertise and practical tools for Kenyan farmers.">
+    <title>PlantWise - Smarter Agriculture for a Brighter Future</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
+<body class="landing-body">
 
-<body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-container">
-            <div class="logo-container">
-                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
-                <div class="logo-text">
-                    <h1>PlantWise</h1>
-                    <p>Crop Advisory & Diagnostics System</p>
+    <!-- Landing Navigation Header -->
+    <header class="landing-header" id="landingHeader">
+        <div class="landing-nav-container">
+            <a href="{{ url_for('index') }}" class="landing-brand">
+                <div class="landing-brand-icon">
+                    <i data-lucide="sprout"></i>
                 </div>
+                <span class="landing-brand-text">PlantWise</span>
+            </a>
+
+            <nav class="landing-nav-links">
+                <a href="{{ url_for('index') }}" class="landing-nav-link active">Home</a>
+                <a href="#about" class="landing-nav-link">About</a>
+                <a href="#features" class="landing-nav-link">Features</a>
+                <div class="landing-nav-dropdown">
+                    <a href="{{ url_for('resources') }}" class="landing-nav-link">
+                        Resources <i data-lucide="chevron-down" class="dropdown-caret"></i>
+                    </a>
+                </div>
+            </nav>
+
+            <div class="landing-nav-actions">
+                {% if user %}
+                    <a href="{{ url_for('user_dashboard') }}" class="btn-landing-signup">Dashboard</a>
+                {% else %}
+                    <a href="{{ url_for('user_register') }}" class="btn-landing-signup">Sign Up</a>
+                {% endif %}
             </div>
-            <button class="admin-btn" onclick="window.location.href='/admin'">
-                <span>Admin Panel</span>
-            </button>
         </div>
     </header>
 
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="container hero-content">
-            <div class="hero-badge">
-                <span>Powered by AI</span>
-            </div>
-            <h1>Smart Farming Solutions</h1>
-            <p>Get expert crop recommendations and diagnose plant diseases with confidence using our intelligent
-                agricultural decision support system</p>
-            <div class="hero-buttons">
-                <a href="#modules" class="btn btn-primary">
-                    <span>Crop Advisory</span>
-                </a>
-                <a href="#modules" class="btn btn-secondary">
-                    <span>Disease Diagnosis</span>
-                </a>
+    <!-- Hero Section with Fixed Background & Parallax Sliding Text -->
+    <section class="landing-hero" id="landingHero">
+        <div class="landing-hero-bg" id="heroBg"></div>
+        <div class="landing-hero-overlay"></div>
+        <div class="landing-hero-content" id="heroContent">
+            <h1 class="landing-hero-title">Smarter Agriculture<br>for a Brighter Future</h1>
+            <p class="landing-hero-subtitle">
+                AI-driven insights, local expertise and practical tools to help Kenyan farmers grow healthier crops, increase yields and build more resilient livelihoods.
+            </p>
+            <div class="landing-hero-cta">
+                {% if user %}
+                    <a href="{{ url_for('user_dashboard') }}" class="btn-hero-primary">Go to Dashboard</a>
+                {% else %}
+                    <a href="{{ url_for('user_register') }}" class="btn-hero-primary">Sign Up</a>
+                {% endif %}
             </div>
         </div>
     </section>
 
-    <!-- Features Section -->
-    <section class="features">
-        <div class="container">
-            <div class="features-header">
-                <h2>Core Features</h2>
-                <p>Advanced agricultural intelligence at your fingertips</p>
+    <!-- Sliding Foreground Layer (Sliding smoothly over fixed hero background) -->
+    <main class="landing-sliding-layer" id="features">
+        <div class="landing-sheet">
+            <div class="landing-sheet-header">
+                <h2>Trusted by Farmers Across Kenya</h2>
+                <p>Better decisions. Healthier crops. Stronger communities.</p>
             </div>
-            <div class="features-grid">
-                <div class="card">
-                    <div class="card-icon primary">
+
+            <!-- 4 Feature Cards in a Row -->
+            <div class="landing-feature-grid">
+                <!-- 1. Crop Advisory -->
+                <a href="{{ url_for('advisory') }}" class="landing-feature-card">
+                    <div class="feature-icon-circle">
                         <i data-lucide="sprout"></i>
                     </div>
-                    <h3>Crop Suitability</h3>
-                    <p>Get personalized crop recommendations based on soil pH, rainfall, temperature, and location</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon secondary">
-                        <i data-lucide="scan-eye"></i>
+                    <h3>Crop Advisory</h3>
+                    <p>Get the best crops for your soil and location.</p>
+                </a>
+
+                <!-- 2. Disease Diagnosis -->
+                <a href="{{ url_for('diagnosis') }}" class="landing-feature-card">
+                    <div class="feature-icon-circle">
+                        <i data-lucide="shield-alert"></i>
                     </div>
-                    <h3>AI Image Analysis</h3>
-                    <p>Upload plant images for instant disease identification using Plant.id API with high accuracy</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon light">
-                        <i data-lucide="cpu"></i>
-                    </div>
-                    <h3>Fuzzy Logic Engine</h3>
-                    <p>Sophisticated inference engine combining rule-based reasoning and certainty factors</p>
-                </div>
-                <div class="card">
-                    <div class="card-icon primary">
+                    <h3>Disease Diagnosis</h3>
+                    <p>Identify plant diseases and get treatment advice.</p>
+                </a>
+
+                <!-- 3. Expert Knowledge -->
+                <a href="{{ url_for('resources') }}" class="landing-feature-card">
+                    <div class="feature-icon-circle">
                         <i data-lucide="book-open"></i>
                     </div>
-                    <h3>Expert Knowledge Base</h3>
-                    <p>Curated database of diseases, symptoms, treatments, and cultural practices</p>
-                </div>
+                    <h3>Expert Knowledge</h3>
+                    <p>Access reliable agricultural information.</p>
+                </a>
+
+                <!-- 4. Weather Insights -->
+                <a href="{% if user %}{{ url_for('weather_alerts_view') }}{% else %}{{ url_for('user_register', next='/weather/alerts') }}{% endif %}" class="landing-feature-card">
+                    <div class="feature-icon-circle">
+                        <i data-lucide="cloud-sun"></i>
+                    </div>
+                    <h3>Weather Insights</h3>
+                    <p>Plan with accurate local forecasts.</p>
+                </a>
+            </div>
+
+            <!-- Brand Tagline Divider -->
+            <div class="landing-tagline">
+                <span>Growing Together</span>
+                <span class="tagline-dot">&bull;</span>
+                <span>Supporting Kenyan Agriculture</span>
+                <span class="tagline-dot">&bull;</span>
+                <span>Building Food Security</span>
+            </div>
+
+            <!-- About Section Anchor -->
+            <div id="about" style="max-width: 800px; margin: 4rem auto 1rem; text-align: center; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.7;">
+                <p>PlantWise pairs grounded agronomic science with intelligent advisory to guide crop suitability, disease diagnosis, market linkages, and weather-aware scheduling for Kenya's smallholder and commercial growers.</p>
             </div>
         </div>
-    </section>
 
-    <!-- Module Selection Section -->
-    <section class="modules-section" id="modules">
-        <div class="container">
-            <div class="modules-header">
-                <h2>Choose Your Module</h2>
-                <p>Select the tool that fits your agricultural needs</p>
-            </div>
-            <div class="modules-grid">
-                <!-- Crop Advisory Module -->
-                <div class="module-card"
-                    style="background-image: linear-gradient(rgba(45, 95, 79, 0.85), rgba(74, 155, 127, 0.85)), url('{{ url_for('static', filename='Images/image.png') }}'); background-size: cover; background-position: center; color: white;">
-                    <div class="module-card-icon">
-                        <i data-lucide="wheat"></i>
+        <!-- Clean Footer -->
+        <footer class="landing-footer">
+            <div class="landing-footer-container">
+                <div class="landing-footer-brand">
+                    <div class="landing-brand-icon-sm">
+                        <i data-lucide="sprout"></i>
                     </div>
-                    <h3 style="color: white;">Crop Suitability Advisory</h3>
-                    <p style="color: rgba(255, 255, 255, 0.95);">Determine which crops are best suited for your
-                        environmental conditions</p>
-
-                    <div class="module-features">
-                        <div class="module-feature">Interactive location and soil parameter inputs</div>
-                        <div class="module-feature">Fuzzy logic processing for environmental variables</div>
-                        <div class="module-feature">Ranked crop recommendations with confidence scores</div>
-                    </div>
-
-                    <a href="/advisory" class="btn btn-primary"
-                        style="text-decoration: none; display: inline-block;">Start Crop Advisory</a>
+                    <span>PlantWise</span>
                 </div>
-
-                <!-- Disease Diagnosis Module -->
-                <div class="module-card secondary"
-                    style="background-image: linear-gradient(rgba(95, 184, 140, 0.85), rgba(141, 205, 176, 0.85)), url('{{ url_for('static', filename='Images/lens.png') }}'); background-size: cover; background-position: center; color: white;">
-                    <div class="module-card-icon">
-                        <i data-lucide="microscope"></i>
-                    </div>
-                    <h3 style="color: white;">Disease Diagnosis</h3>
-                    <p style="color: rgba(255, 255, 255, 0.95);">Identify crop diseases through symptoms or AI-powered
-                        image analysis</p>
-
-                    <div class="module-features">
-                        <div class="module-feature">Symptom-based diagnosis with confidence ratings</div>
-                        <div class="module-feature">AI image recognition with Plant.id integration</div>
-                        <div class="module-feature">Detailed treatment recommendations and reasoning</div>
-                    </div>
-
-                    <a href="/diagnosis" class="btn btn-primary"
-                        style="text-decoration: none; display: inline-block;">Start Diagnosis</a>
+                <p class="landing-footer-copy">&copy; 2025 PlantWise Agricultural Advisory System. All rights reserved.</p>
+                <div class="landing-footer-links">
+                    <a href="{{ url_for('resources') }}">Knowledge Base</a>
+                    <a href="{{ url_for('user_login') }}">Sign In</a>
+                    <a href="/admin/login">Admin</a>
                 </div>
             </div>
-        </div>
-    </section>
+        </footer>
+    </main>
 
-    <!-- Footer -->
-    <footer
-        style="background-color: var(--primary-green); color: white; padding: var(--spacing-2xl) 0; text-align: center;">
-        <div class="container">
-            <p>&copy; 2025 PlantWise Agricultural Expert System. All rights reserved.</p>
-            <p style="opacity: 0.8; font-size: var(--font-size-sm);">Developed by Audi Peter Ojwang' - KCA University
-            </p>
-        </div>
-    </footer>
+    <script>
+        lucide.createIcons();
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    <script>lucide.createIcons();</script>
+        // Parallax sliding effect: hero text translates smoothly up over background
+        const heroContent = document.getElementById('heroContent');
+        const heroBg = document.getElementById('heroBg');
+        const landingHeader = document.getElementById('landingHeader');
+
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+                    const vh = window.innerHeight;
+
+                    if (scrollY > 50) {
+                        landingHeader.classList.add('scrolled');
+                    } else {
+                        landingHeader.classList.remove('scrolled');
+                    }
+
+                    if (scrollY < vh * 1.5) {
+                        if (heroContent) {
+                            // Text scrolls up on top of fixed background as an illusion
+                            heroContent.style.transform = `translate3d(0, ${scrollY * -0.35}px, 0)`;
+                            heroContent.style.opacity = Math.max(0, 1 - (scrollY / (vh * 0.72)));
+                        }
+                        if (heroBg) {
+                            // Subtle micro-scale providing immersive depth
+                            heroBg.style.transform = `scale(${1 + scrollY * 0.00015})`;
+                        }
+                    }
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }, { passive: true });
+    </script>
 </body>
-
 </html>

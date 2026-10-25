@@ -1,0 +1,44 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}My Farms - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>My Farms</h1><p>Manage your farms and crop cycles</p></div>
+    <a href="{{ url_for('farm_new') }}" class="btn btn-primary"><i data-lucide="plus" style="width:16px;height:16px;margin-right:4px;"></i> Add Farm</a>
+</div>
+{% if farms %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem;">
+    {% for f in farms %}
+    <div class="data-card" style="overflow:visible;">
+        <div style="padding:1.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <h3 style="margin:0;font-size:1.1rem;">{{ f.name }}</h3>
+                    <p style="margin:4px 0 0;color:var(--text-light);font-size:.85rem;">{{ f.county_name or '' }}{% if f.sub_county_name %} / {{ f.sub_county_name }}{% endif %}</p>
+                </div>
+                <span class="badge badge-info">{{ f.cycle_count }} cycle{% if f.cycle_count != 1 %}s{% endif %}</span>
+            </div>
+            <div style="margin-top:1rem;display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.8rem;color:var(--text-medium);">
+                {% if f.total_area_ha %}<div>📐 {{ f.total_area_ha }} ha</div>{% endif %}
+                {% if f.soil_ph %}<div>🧪 pH {{ f.soil_ph }}</div>{% endif %}
+            </div>
+        </div>
+        <div style="padding:.75rem 1.5rem;border-top:1px solid var(--border-color);display:flex;gap:.5rem;">
+            <a href="{{ url_for('farm_detail', farm_id=f.id) }}" class="btn btn-sm btn-outline">View</a>
+            <a href="{{ url_for('farm_edit', farm_id=f.id) }}" class="btn btn-sm btn-ghost">Edit</a>
+            <form method="POST" action="{{ url_for('farm_delete', farm_id=f.id) }}" style="margin-left:auto;" onsubmit="return confirm('Delete this farm?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">🌾</div>
+    <h3>No farms yet</h3>
+    <p>Add your first farm to start tracking your crop cycles and land resources.</p>
+    <a href="{{ url_for('farm_new') }}" class="btn btn-primary">Add My First Farm</a>
+</div>
+{% endif %}
+{% endblock %}

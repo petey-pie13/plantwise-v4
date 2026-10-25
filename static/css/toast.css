@@ -1,0 +1,186 @@
+/* PlantWise Modern Toast Notification System */
+:root {
+  --toast-success-bg: #ecfdf5;
+  --toast-success-border: #10b981;
+  --toast-success-text: #065f46;
+  --toast-error-bg: #fef2f2;
+  --toast-error-border: #ef4444;
+  --toast-error-text: #991b1b;
+  --toast-warning-bg: #fffbeb;
+  --toast-warning-border: #f59e0b;
+  --toast-warning-text: #92400e;
+  --toast-info-bg: #eff6ff;
+  --toast-info-border: #3b82f6;
+  --toast-info-text: #1e40af;
+  --toast-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  --toast-radius: 12px;
+}
+
+#toast-container {
+  position: fixed;
+  top: env(safe-area-inset-top, 20px);
+  right: 20px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 400px;
+  width: calc(100% - 40px);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  #toast-container {
+    top: env(safe-area-inset-top, 16px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: calc(100% - 32px);
+  }
+}
+
+.plantwise-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--toast-radius);
+  border-left: 5px solid;
+  box-shadow: var(--toast-shadow);
+  background: #ffffff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  transform: translateY(-20px) scale(0.95);
+  opacity: 0;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  touch-action: pan-y;
+  position: relative;
+  overflow: hidden;
+}
+
+.plantwise-toast.show {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.plantwise-toast.hide {
+  transform: translateY(-15px) scale(0.9);
+  opacity: 0;
+}
+
+/* Toast types */
+.plantwise-toast.toast-success {
+  background-color: var(--toast-success-bg);
+  border-left-color: var(--toast-success-border);
+  color: var(--toast-success-text);
+}
+
+.plantwise-toast.toast-error {
+  background-color: var(--toast-error-bg);
+  border-left-color: var(--toast-error-border);
+  color: var(--toast-error-text);
+}
+
+.plantwise-toast.toast-warning {
+  background-color: var(--toast-warning-bg);
+  border-left-color: var(--toast-warning-border);
+  color: var(--toast-warning-text);
+}
+
+.plantwise-toast.toast-info {
+  background-color: var(--toast-info-bg);
+  border-left-color: var(--toast-info-border);
+  color: var(--toast-info-text);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.toast-content {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.toast-message {
+  margin: 0;
+  font-weight: 500;
+}
+
+.toast-action-btn {
+  margin-top: 8px;
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+
+.toast-action-btn:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.toast-close-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 4px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.6;
+  border-radius: 6px;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.toast-close-btn:hover,
+.toast-close-btn:focus {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* No-JS fallback container */
+.no-js-flash-container {
+  max-width: 900px;
+  margin: 16px auto;
+  padding: 0 16px;
+}
+
+.no-js-flash {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  border-left: 4px solid;
+}
+
+.no-js-flash.flash-success { background: #ecfdf5; border-color: #10b981; color: #065f46; }
+.no-js-flash.flash-error   { background: #fef2f2; border-color: #ef4444; color: #991b1b; }
+.no-js-flash.flash-warning { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
+.no-js-flash.flash-info    { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+
+@media (prefers-reduced-motion: reduce) {
+  .plantwise-toast {
+    transition: none !important;
+  }
+}

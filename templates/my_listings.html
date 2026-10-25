@@ -1,0 +1,33 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}My Listings - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>My Listings</h1><p>Manage your produce for sale</p></div>
+    <a href="{{ url_for('listing_new') }}" class="btn btn-primary"><i data-lucide="plus" style="width:16px;height:16px;margin-right:4px;"></i> New Listing</a>
+</div>
+{% if listings %}
+<div class="data-card">
+    <table class="data-table">
+        <thead><tr><th>Crop</th><th>Qty (kg)</th><th>Price/kg</th><th>County</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for l in listings %}
+        <tr>
+            <td><strong>{{ l.crop_name }}</strong>{% if l.variety_name %}<br><span style="font-size:.8rem;color:var(--text-light);">{{ l.variety_name }}</span>{% endif %}</td>
+            <td>{{ l.quantity_kg }}</td>
+            <td>KES {{ "%.2f"|format(l.price_per_kg) }}</td>
+            <td>{{ l.county_name or '—' }}</td>
+            <td><span class="badge {% if l.status == 'active' %}badge-success{% elif l.status == 'paused' %}badge-warning{% elif l.status == 'sold' %}badge-purple{% else %}badge-error{% endif %}">{{ l.status }}</span></td>
+            <td style="font-size:.8rem;color:var(--text-light);">{{ l.created_at.strftime('%d %b %Y') if l.created_at else '—' }}</td>
+            <td style="display:flex;gap:.4rem;">
+                <a href="{{ url_for('listing_detail', listing_id=l.id) }}" class="btn btn-sm btn-ghost">View</a>
+                <a href="{{ url_for('listing_edit', listing_id=l.id) }}" class="btn btn-sm btn-outline">Edit</a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state"><div class="empty-state-icon">🏪</div><h3>No listings yet</h3><p>Start selling your produce on the marketplace.</p><a href="{{ url_for('listing_new') }}" class="btn btn-primary">Create First Listing</a></div>
+{% endif %}
+{% endblock %}

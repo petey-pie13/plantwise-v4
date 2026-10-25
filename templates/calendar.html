@@ -1,0 +1,207 @@
+{% extends 'app_base.html' %}
+{% block title %}Farm Calendar - PlantWise{% endblock %}
+{% block search_placeholder %}Search events, crops, or tasks...{% endblock %}
+
+{% block content %}
+<div class="calendar-page-wrapper">
+    <!-- Page Header & Action Controls -->
+    <div class="workspace-page-header">
+        <div>
+            <h1 class="workspace-page-title">Farm Calendar</h1>
+            <p class="workspace-page-subtitle">Plan your activities and never miss an important task.</p>
+        </div>
+        <div class="workspace-page-actions calendar-header-actions">
+            <!-- View Switcher [ Month | Week | Agenda ] -->
+            <div class="calendar-view-switcher" role="group">
+                <button type="button" class="view-switch-btn active" onclick="switchView('month', this)">Month</button>
+                <button type="button" class="view-switch-btn" onclick="switchView('week', this)">Week</button>
+                <button type="button" class="view-switch-btn" onclick="switchView('agenda', this)">Agenda</button>
+            </div>
+
+            <!-- Add Activity Button -->
+            <a href="{{ url_for('task_new') }}" class="btn-primary-action">
+                <i data-lucide="plus"></i>
+                <span>Add Activity</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- 2-Column Split: Calendar Grid + Upcoming Activities Sidebar -->
+    <div class="calendar-layout-grid">
+        <!-- Left: Interactive Month Calendar Canvas -->
+        <div class="content-panel-card calendar-month-canvas">
+            <div class="calendar-nav-bar">
+                <h3 class="current-month-heading" id="currentMonthLabel">April 2025</h3>
+                <div class="month-nav-arrows">
+                    <button type="button" class="arrow-btn" onclick="changeMonth(-1)" aria-label="Previous Month">
+                        <i data-lucide="chevron-left"></i>
+                    </button>
+                    <button type="button" class="arrow-btn" onclick="changeMonth(1)" aria-label="Next Month">
+                        <i data-lucide="chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Calendar Days Header -->
+            <div class="calendar-weekdays-row">
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+                <div>Sun</div>
+            </div>
+
+            <!-- Calendar Days Grid -->
+            <div class="calendar-days-grid" id="calendarDaysGrid">
+                <!-- Row 1 -->
+                <div class="day-cell"><span class="day-num">31</span></div>
+                <div class="day-cell"><span class="day-num">1</span></div>
+                <div class="day-cell"><span class="day-num">2</span></div>
+                <div class="day-cell"><span class="day-num">3</span></div>
+                <div class="day-cell"><span class="day-num">4</span></div>
+                <div class="day-cell"><span class="day-num">5</span></div>
+                <div class="day-cell"><span class="day-num">6</span></div>
+
+                <!-- Row 2 -->
+                <div class="day-cell"><span class="day-num">7</span><div class="task-pill green-pill">Planting - Maize</div></div>
+                <div class="day-cell"><span class="day-num">8</span></div>
+                <div class="day-cell"><span class="day-num">9</span></div>
+                <div class="day-cell"><span class="day-num">10</span></div>
+                <div class="day-cell"><span class="day-num">11</span></div>
+                <div class="day-cell"><span class="day-num">12</span></div>
+                <div class="day-cell"><span class="day-num">13</span></div>
+
+                <!-- Row 3 -->
+                <div class="day-cell"><span class="day-num">14</span></div>
+                <div class="day-cell"><span class="day-num">15</span></div>
+                <div class="day-cell active-today"><span class="day-num">16</span><div class="task-pill green-pill">Field Inspection</div></div>
+                <div class="day-cell"><span class="day-num">17</span><div class="task-pill blue-pill">Fertilizer Application</div></div>
+                <div class="day-cell"><span class="day-num">18</span></div>
+                <div class="day-cell"><span class="day-num">19</span></div>
+                <div class="day-cell"><span class="day-num">20</span><div class="task-pill amber-pill">Pest Monitoring</div></div>
+
+                <!-- Row 4 -->
+                <div class="day-cell"><span class="day-num">21</span></div>
+                <div class="day-cell"><span class="day-num">22</span></div>
+                <div class="day-cell"><span class="day-num">23</span></div>
+                <div class="day-cell"><span class="day-num">24</span></div>
+                <div class="day-cell"><span class="day-num">25</span><div class="task-pill purple-pill">Harvesting (Maize)</div></div>
+                <div class="day-cell"><span class="day-num">26</span></div>
+                <div class="day-cell"><span class="day-num">27</span></div>
+
+                <!-- Row 5 -->
+                <div class="day-cell"><span class="day-num">28</span></div>
+                <div class="day-cell"><span class="day-num">29</span></div>
+                <div class="day-cell"><span class="day-num">30</span></div>
+                <div class="day-cell other-month"><span class="day-num">1</span></div>
+                <div class="day-cell other-month"><span class="day-num">2</span></div>
+                <div class="day-cell other-month"><span class="day-num">3</span></div>
+                <div class="day-cell other-month"><span class="day-num">4</span></div>
+            </div>
+        </div>
+
+        <!-- Right: Upcoming Activities Panel -->
+        <div class="content-panel-card upcoming-activities-panel">
+            <h3 class="panel-title" style="margin-bottom: 20px;">Upcoming Activities</h3>
+
+            <div class="upcoming-activities-list">
+                <!-- Group 1: Today -->
+                <div class="activity-date-group">
+                    <div class="activity-date-label">Today, Apr 16</div>
+                    <div class="activity-item-card">
+                        <div class="activity-dot green-dot"></div>
+                        <div class="activity-details">
+                            <span class="activity-name">Field Inspection</span>
+                            <span class="activity-timing">9:00 AM - 11:00 AM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 2: Tomorrow -->
+                <div class="activity-date-group">
+                    <div class="activity-date-label">Tomorrow, Apr 17</div>
+                    <div class="activity-item-card">
+                        <div class="activity-dot blue-dot"></div>
+                        <div class="activity-details">
+                            <span class="activity-name">Fertilizer Application</span>
+                            <span class="activity-timing">8:00 AM - 10:00 AM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 3: Apr 20 -->
+                <div class="activity-date-group">
+                    <div class="activity-date-label">Apr 20</div>
+                    <div class="activity-item-card">
+                        <div class="activity-dot amber-dot"></div>
+                        <div class="activity-details">
+                            <span class="activity-name">Pest Monitoring</span>
+                            <span class="activity-timing">7:00 AM - 9:00 AM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 4: Apr 25 -->
+                <div class="activity-date-group">
+                    <div class="activity-date-label">Apr 25</div>
+                    <div class="activity-item-card">
+                        <div class="activity-dot purple-dot"></div>
+                        <div class="activity-details">
+                            <span class="activity-name">Harvesting (Maize)</span>
+                            <span class="activity-timing">8:00 AM - 12:00 PM</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real Database Tasks if available -->
+            {% if tasks %}
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color, #e2e8e0);">
+                <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 12px;">Active Field Schedule ({{ tasks|length }})</div>
+                {% for t in tasks %}
+                <div class="activity-item-card" style="margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+                        <div class="activity-dot {% if t.status == 'completed' %}green-dot{% elif t.status == 'postponed' %}amber-dot{% else %}blue-dot{% endif %}"></div>
+                        <div class="activity-details" style="min-width: 0;">
+                            <span class="activity-name" style="{% if t.status == 'completed' %}text-decoration: line-through; opacity: 0.7;{% endif %} display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ t.title }}</span>
+                            <span class="activity-timing" style="font-size: 11px; color: #64748b;">
+                                {{ t.due_date.strftime('%b %d') if t.due_date else 'Scheduled' }}
+                                {% if t.farm_name %} &bull; {{ t.farm_name }}{% endif %}
+                                {% if t.crop_name %} &bull; {{ t.crop_name }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <form method="POST" action="{{ url_for('task_toggle', task_id=t.id) }}" style="margin: 0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-sm" style="padding: 4px 8px; font-size: 11px; background: {% if t.status == 'completed' %}#f1f5f9{% else %}#e8f5e9{% endif %}; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" title="Toggle Complete">
+                                {% if t.status == 'completed' %}Undo{% else %}Done{% endif %}
+                            </button>
+                        </form>
+                        <a href="{{ url_for('task_edit', task_id=t.id) }}" style="font-size: 11px; color: #3b82f6; text-decoration: none; padding: 4px;">Edit</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchView(viewName, btn) {
+        document.querySelectorAll('.view-switch-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    let currentMonthIdx = 3; // April
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    function changeMonth(delta) {
+        currentMonthIdx = (currentMonthIdx + delta + 12) % 12;
+        document.getElementById('currentMonthLabel').textContent = `${months[currentMonthIdx]} 2025`;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - PlantWise</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/toast.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="auth-page-body">
+
+<div class="auth-container-split">
+    <!-- Left Hero Banner with Portrait Background -->
+    <div class="auth-hero-panel">
+        <div class="auth-hero-top">
+            <a href="{{ url_for('index') }}" class="auth-brand-logo">
+                <div class="brand-icon-box">
+                    <i data-lucide="sprout"></i>
+                </div>
+                <span>PlantWise</span>
+            </a>
+        </div>
+
+        <!-- Small cards & icons anchored almost at the bottom to maximize image visibility -->
+        <div class="auth-hero-bottom-wrap">
+            <div class="auth-bottom-intro">
+                <div class="auth-badge-pill">
+                    <i data-lucide="sparkles"></i>
+                    <span>Kenya Agricultural Intelligence</span>
+                </div>
+                <h1 class="auth-hero-heading-compact">Grow With PlantWise</h1>
+                <p class="auth-hero-desc-compact">Join thousands of farmers making higher yields with expert tools.</p>
+            </div>
+
+            <div class="auth-mini-cards-grid">
+                <div class="auth-mini-card">
+                    <div class="mini-card-icon">
+                        <i data-lucide="sprout"></i>
+                    </div>
+                    <div class="mini-card-info">
+                        <span class="mini-card-title">Crop Planning</span>
+                        <span class="mini-card-sub">Soil & season match</span>
+                    </div>
+                </div>
+                <div class="auth-mini-card">
+                    <div class="mini-card-icon">
+                        <i data-lucide="calendar"></i>
+                    </div>
+                    <div class="mini-card-info">
+                        <span class="mini-card-title">Smart Calendar</span>
+                        <span class="mini-card-sub">Auto farm tasking</span>
+                    </div>
+                </div>
+                <div class="auth-mini-card">
+                    <div class="mini-card-icon">
+                        <i data-lucide="shopping-bag"></i>
+                    </div>
+                    <div class="mini-card-info">
+                        <span class="mini-card-title">Marketplace</span>
+                        <span class="mini-card-sub">Direct produce sales</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Form Panel -->
+    <div class="auth-form-panel">
+        <div class="auth-card-inner">
+            <h2 class="auth-form-title">Sign Up</h2>
+            <p class="auth-form-subtitle">Create your account to get started</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-container">
+                {% for cat, msg in messages %}
+                <div class="alert-box alert-{{ cat }}">{{ msg }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="/signup" class="auth-form-element" id="signupForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if next_url %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+                {% endif %}
+
+                <div class="form-field-group">
+                    <label for="full_name" class="form-label">Full Name</label>
+                    <input type="text" id="full_name" name="full_name" class="form-control-input" placeholder="Enter your full name" required autofocus>
+                </div>
+
+                <div class="form-field-group">
+                    <label for="email" class="form-label">Email Address</label>
+                    <input type="email" id="email" name="email" class="form-control-input" placeholder="Enter your email address" required>
+                </div>
+
+                <div class="form-field-group">
+                    <label for="phone" class="form-label">Phone Number (Optional)</label>
+                    <input type="tel" id="phone" name="phone" class="form-control-input" placeholder="Enter your phone number">
+                </div>
+
+                <div class="form-field-group">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="input-password-wrap">
+                        <input type="password" id="password" name="password" class="form-control-input" placeholder="Create a strong password" required minlength="8">
+                        <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('password', this)" aria-label="Toggle password visibility">
+                            <i data-lucide="eye" id="password-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- "I am a" Role Segmented Selector -->
+                <div class="form-field-group">
+                    <label class="form-label">I am a</label>
+                    <div class="segmented-role-control" role="group" aria-label="Account Type">
+                        <button type="button" class="role-pill active" data-role="farmer" onclick="selectRole('farmer', this)">Farmer</button>
+                        <button type="button" class="role-pill" data-role="extension" onclick="selectRole('extension', this)">Extension Officer</button>
+                        <button type="button" class="role-pill" data-role="admin" onclick="selectRole('admin', this)">Administrator</button>
+                    </div>
+                    <input type="hidden" name="role" id="selectedRole" value="farmer">
+                </div>
+
+                <!-- Terms and Privacy Checkbox -->
+                <div class="form-checkbox-row">
+                    <input type="checkbox" id="agree_terms" name="agree_terms" required class="form-checkbox">
+                    <label for="agree_terms" class="checkbox-label">
+                        I agree to the <a href="{{ url_for('resources') }}" target="_blank">Terms of Service</a> and <a href="{{ url_for('resources') }}" target="_blank">Privacy Policy</a>
+                    </label>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="btn-auth-primary">Create Account</button>
+            </form>
+
+            <p class="auth-bottom-switch">
+                Already have an account? <a href="{{ url_for('user_login', next=next_url) if next_url else url_for('user_login') }}">Sign In</a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+
+    function togglePasswordVisibility(fieldId, btn) {
+        const input = document.getElementById(fieldId);
+        const icon = btn.querySelector('i') || btn.querySelector('svg');
+        if (input.type === 'password') {
+            input.type = 'text';
+            btn.innerHTML = '<i data-lucide="eye-off"></i>';
+        } else {
+            input.type = 'password';
+            btn.innerHTML = '<i data-lucide="eye"></i>';
+        }
+        lucide.createIcons();
+    }
+
+    function selectRole(role, btn) {
+        document.querySelectorAll('.role-pill').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('selectedRole').value = 'farmer'; // Securely assigned on backend
+    }
+</script>
+<div id="toast-container"></div>
+<script id="plantwise-flash-carrier" type="application/json">
+    {{ get_flashed_messages(with_categories=true) | tojson | safe }}
+</script>
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@
 <body>
     <h1>Simple Form Test</h1>
     <form method="POST" action="/advisory">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>County:</label>
         <select name="county" required>
             <option value="">Select</option>

@@ -34,10 +34,18 @@ desktop.ini
 
 # ── Logs & Temp ───────────────────────────────────────────────────────────────
 *.log
+install_log.txt
+scratch/
 error.txt
 *.tmp
 *.bak
 
+
 # ── Database Dumps ────────────────────────────────────────────────────────────
 *.sql
 *.dump
+
+# ── Dynamic Uploads & Audit Reports ──────────────────────────────────────────
+static/uploads/*
+!static/uploads/.gitkeep
+bandit_report.txt

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PlantWise{% endblock %} - Smart Farming</title>
+    <meta name="description" content="{% block description %}PlantWise - Intelligent Agricultural Platform for Kenya{% endblock %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/toast.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="app-body">
+
+<div class="app-shell">
+    <!-- Persistent Left Sidebar (Deep Forest Pine Green) -->
+    <aside class="app-sidebar" id="appSidebar">
+        <!-- Logo -->
+        <a href="{{ url_for('user_dashboard') }}" class="app-sidebar-brand">
+            <div class="brand-icon-box">
+                <i data-lucide="sprout"></i>
+            </div>
+            <span>PlantWise</span>
+        </a>
+
+        <!-- Navigation Links -->
+        <nav class="app-sidebar-nav">
+            <!-- 1. Dashboard -->
+            <a href="{{ url_for('user_dashboard') }}" class="sidebar-nav-item {% if request.endpoint == 'user_dashboard' %}active{% endif %}">
+                <i data-lucide="layout-dashboard"></i>
+                <span>Dashboard</span>
+            </a>
+
+            <!-- 2. My Farms -->
+            <a href="{{ url_for('farm_list') }}" class="sidebar-nav-item {% if 'farm' in request.endpoint and 'calendar' not in request.endpoint %}active{% endif %}">
+                <i data-lucide="layers"></i>
+                <span>My Farms</span>
+            </a>
+
+            <!-- 3. Crops & Planning -->
+            <a href="{{ url_for('advisory') }}" class="sidebar-nav-item {% if 'advisory' in request.endpoint or 'diagnosis' in request.endpoint %}active{% endif %}">
+                <i data-lucide="sprout"></i>
+                <span>Crops & Planning</span>
+            </a>
+
+            <!-- 4. Marketplace -->
+            <a href="{{ url_for('marketplace') }}" class="sidebar-nav-item {% if 'marketplace' in request.endpoint or 'listing' in request.endpoint or 'order' in request.endpoint %}active{% endif %}">
+                <i data-lucide="shopping-bag"></i>
+                <span>Marketplace</span>
+            </a>
+
+            <!-- 5. AI Assistant -->
+            <a href="{{ url_for('assistant_home') }}" class="sidebar-nav-item {% if 'assistant' in request.endpoint %}active{% endif %}">
+                <i data-lucide="sparkles"></i>
+                <span>AI Assistant</span>
+            </a>
+
+            <!-- 6. Calendar -->
+            <a href="{{ url_for('calendar_home') }}" class="sidebar-nav-item {% if 'calendar' in request.endpoint or 'task' in request.endpoint %}active{% endif %}">
+                <i data-lucide="calendar"></i>
+                <span>Calendar</span>
+            </a>
+
+            <!-- 7. Weather -->
+            <a href="{{ url_for('weather_alerts_view') }}" class="sidebar-nav-item {% if 'weather' in request.endpoint %}active{% endif %}">
+                <i data-lucide="cloud-sun"></i>
+                <span>Weather</span>
+            </a>
+
+            <!-- 8. Knowledge Base -->
+            <a href="{{ url_for('resources') }}" class="sidebar-nav-item {% if 'resources' in request.endpoint %}active{% endif %}">
+                <i data-lucide="book-open"></i>
+                <span>Knowledge Base</span>
+            </a>
+
+            <!-- 9. Settings -->
+            <a href="{{ url_for('user_profile') }}" class="sidebar-nav-item {% if request.endpoint == 'user_profile' %}active{% endif %}">
+                <i data-lucide="settings"></i>
+                <span>Settings</span>
+            </a>
+        </nav>
+
+        <!-- Pinned Bottom User Card -->
+        <div class="app-sidebar-footer">
+            <a href="{{ url_for('user_profile') }}" class="sidebar-user-card" title="View profile">
+                <div class="sidebar-user-avatar">
+                    {% if user and user.full_name %}
+                        {{ user.full_name[0].upper() }}
+                    {% else %}
+                        J
+                    {% endif %}
+                </div>
+                <div class="sidebar-user-meta">
+                    <span class="user-meta-name">{{ user.full_name if user else 'John Kamau' }}</span>
+                    <span class="user-meta-role">{{ (user.role if user else 'farmer').capitalize() }}</span>
+                </div>
+            </a>
+            <form method="POST" action="{{ url_for('user_logout') }}" style="margin: 0; display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-sidebar-logout" title="Sign out" aria-label="Sign out" style="background: none; border: none; cursor: pointer;">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <!-- Main Content Canvas -->
+    <div class="app-main-canvas">
+        <!-- Top Navigation Bar -->
+        <header class="app-topbar">
+            <div class="topbar-search-wrap">
+                <i data-lucide="search" class="topbar-search-icon"></i>
+                <input type="text" class="topbar-search-input" placeholder="{% block search_placeholder %}Search crops, diseases, or get advice...{% endblock %}">
+            </div>
+
+            <div class="topbar-actions">
+                <button type="button" class="topbar-icon-btn" title="Notifications" aria-label="Notifications" onclick="if(window.toast) toast.info('No unread notifications.');">
+                    <i data-lucide="bell"></i>
+                    <span class="notif-badge-dot"></span>
+                </button>
+                <a href="{{ url_for('resources') }}" class="topbar-icon-btn" title="Help & Guides" aria-label="Help & Guides">
+                    <i data-lucide="help-circle"></i>
+                </a>
+                <a href="{{ url_for('user_profile') }}" class="topbar-avatar-btn" title="{{ user.full_name if user else 'Profile' }}">
+                    <div class="topbar-avatar-circle">
+                        {% if user and user.full_name %}
+                            {{ user.full_name[0].upper() }}
+                        {% else %}
+                            J
+                        {% endif %}
+                    </div>
+                </a>
+            </div>
+        </header>
+
+        <!-- Workspace Page Content -->
+        <main class="app-workspace">
+            <!-- Server-rendered flash data carrier for toast hydration -->
+            <script id="plantwise-flash-carrier" type="application/json">
+                {{ get_flashed_messages(with_categories=true) | tojson | safe }}
+            </script>
+            <noscript id="no-js-flash-fallback">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="no-js-flash-container">
+                    {% for cat, msg in messages %}
+                    <div class="no-js-flash flash-{{ cat }}">{{ msg }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </noscript>
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="{{ url_for('static', filename='js/toast.js') }}"></script>
+<script>
+    lucide.createIcons();
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

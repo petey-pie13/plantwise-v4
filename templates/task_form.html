@@ -1,0 +1,108 @@
+{% extends 'app_base.html' %}
+{% block title %}{% if task %}Edit Task{% else %}New Farm Task{% endif %} - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{% if task %}Edit Task{% else %}Create Farm Task{% endif %}</h1>
+        <p>{% if task %}Update details or status for this task{% else %}Schedule field operations, input applications, and scouting dates{% endif %}</p>
+    </div>
+    <a href="{{ url_for('calendar_home') }}" class="btn btn-secondary">
+        <i data-lucide="arrow-left"></i> Back to Calendar
+    </a>
+</div>
+
+<div class="card" style="max-width: 720px; margin: 0 auto;">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label class="form-label" for="title">Task Title *</label>
+            <input type="text" class="form-input" id="title" name="title" required
+                   value="{{ task.title if task else (prefill_title or '') }}"
+                   placeholder="e.g. Apply CAN top-dressing to Section A Maize">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label class="form-label" for="farm_id">Farm</label>
+                <select class="form-input" id="farm_id" name="farm_id">
+                    <option value="">-- No specific farm --</option>
+                    {% for f in farms %}
+                    <option value="{{ f.id }}" {% if (task and task.farm_id == f.id) %}selected{% endif %}>
+                        {{ f.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="crop_cycle_id">Associated Crop Cycle</label>
+                <select class="form-input" id="crop_cycle_id" name="crop_cycle_id">
+                    <option value="">-- None / General Task --</option>
+                    {% for c in cycles %}
+                    <option value="{{ c.id }}" {% if (task and task.crop_cycle_id == c.id) %}selected{% endif %}>
+                        {{ c.crop_name }} {% if c.variety_name %}({{ c.variety_name }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label class="form-label" for="task_category">Category</label>
+                <select class="form-input" id="task_category" name="task_category">
+                    <option value="soil_prep" {% if task and task.task_category == 'soil_prep' %}selected{% endif %}>Land & Soil Prep</option>
+                    <option value="planting" {% if task and task.task_category == 'planting' %}selected{% endif %}>Planting / Sowing</option>
+                    <option value="fertilizing" {% if task and task.task_category == 'fertilizing' %}selected{% endif %}>Fertilizing / Nutrition</option>
+                    <option value="weeding" {% if task and task.task_category == 'weeding' %}selected{% endif %}>Weeding / Hilling</option>
+                    <option value="pest_control" {% if task and task.task_category == 'pest_control' %}selected{% endif %}>Pest & Disease Control</option>
+                    <option value="irrigation" {% if task and task.task_category == 'irrigation' %}selected{% endif %}>Irrigation / Moisture</option>
+                    <option value="harvesting" {% if task and task.task_category == 'harvesting' %}selected{% endif %}>Harvesting</option>
+                    <option value="post_harvest" {% if task and task.task_category == 'post_harvest' %}selected{% endif %}>Post-Harvest & Storage</option>
+                    <option value="general" {% if task and task.task_category == 'general' %}selected{% endif %}>General Farm Work</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="due_date">Due Date *</label>
+                <input type="date" class="form-input" id="due_date" name="due_date" required
+                       value="{{ task.due_date if task else '' }}">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="priority">Priority</label>
+                <select class="form-input" id="priority" name="priority">
+                    <option value="low" {% if task and task.priority == 'low' %}selected{% endif %}>Low</option>
+                    <option value="medium" {% if not task or task.priority == 'medium' %}selected{% endif %}>Medium</option>
+                    <option value="high" {% if task and task.priority == 'high' %}selected{% endif %}>High</option>
+                </select>
+            </div>
+        </div>
+
+        {% if task %}
+        <div class="form-group">
+            <label class="form-label" for="status">Status</label>
+            <select class="form-input" id="status" name="status">
+                <option value="pending" {% if task.status == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="postponed" {% if task.status == 'postponed' %}selected{% endif %}>Postponed</option>
+                <option value="cancelled" {% if task.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label class="form-label" for="description">Instructions & Field Notes</label>
+            <textarea class="form-input" id="description" name="description" rows="4"
+                      placeholder="e.g. Calibrate knapsack sprayer to 20L water per 50ml product. Wear full PPE.">{{ task.description if task else '' }}</textarea>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+            <a href="{{ url_for('calendar_home') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if task %}Save Changes{% else %}Create Task{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

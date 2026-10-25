@@ -1,0 +1,132 @@
+{% extends 'app_base.html' %}
+{% block title %}Marketplace - PlantWise{% endblock %}
+{% block search_placeholder %}Search products...{% endblock %}
+
+{% block content %}
+<div class="marketplace-page-wrapper">
+    <!-- Top Header & Sell Product CTA -->
+    <div class="workspace-page-header">
+        <div>
+            <h1 class="workspace-page-title">Marketplace</h1>
+        </div>
+        <div class="workspace-page-actions">
+            {% if user and user.role in ['seller', 'farmer'] %}
+            <a href="{{ url_for('listing_new') }}" class="btn-primary-action">
+                <i data-lucide="plus"></i>
+                <span>Sell Product</span>
+            </a>
+            {% else %}
+            <a href="{{ url_for('listing_new') }}" class="btn-primary-action">
+                <i data-lucide="plus"></i>
+                <span>Sell Product</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Marketplace Tabs: Browse & My Listings -->
+    <div class="marketplace-nav-tabs">
+        <a href="{{ url_for('marketplace') }}" class="marketplace-tab active">Browse</a>
+        <a href="{{ url_for('my_listings') }}" class="marketplace-tab">My Listings</a>
+        {% if user and user.role == 'buyer' %}
+        <a href="{{ url_for('my_orders') }}" class="marketplace-tab">My Orders</a>
+        {% endif %}
+    </div>
+
+    <!-- Filter Control Bar -->
+    <form method="GET" action="{{ url_for('marketplace') }}" class="marketplace-filter-bar">
+        <div class="filter-select-group">
+            <select name="crop" class="filter-dropdown" onchange="this.form.submit()">
+                <option value="">All Categories</option>
+                <option value="Maize" {% if filters.crop == 'Maize' %}selected{% endif %}>Maize</option>
+                <option value="Beans" {% if filters.crop == 'Beans' %}selected{% endif %}>Beans</option>
+                <option value="Kale" {% if filters.crop == 'Kale' %}selected{% endif %}>Kale</option>
+                <option value="Tomatoes" {% if filters.crop == 'Tomatoes' %}selected{% endif %}>Tomatoes</option>
+                <option value="Irish Potatoes" {% if 'Potato' in filters.crop %}selected{% endif %}>Potatoes</option>
+                <option value="Onions" {% if filters.crop == 'Onions' %}selected{% endif %}>Onions</option>
+                <option value="Avocado" {% if filters.crop == 'Avocado' %}selected{% endif %}>Avocado</option>
+                <option value="Green Peas" {% if filters.crop == 'Green Peas' %}selected{% endif %}>Green Peas</option>
+            </select>
+
+            <select name="county_id" class="filter-dropdown" onchange="this.form.submit()">
+                <option value="">All Counties</option>
+                {% for c in counties %}
+                <option value="{{ c.county_id }}" {% if filters.county_id == c.county_id|string %}selected{% endif %}>{{ c.county_name }}</option>
+                {% endfor %}
+            </select>
+
+            <select name="sort" class="filter-dropdown" onchange="this.form.submit()">
+                <option value="newest">Sort by: Newest</option>
+                <option value="price_asc">Sort by: Price (Low to High)</option>
+                <option value="price_desc">Sort by: Price (High to Low)</option>
+            </select>
+        </div>
+    </form>
+
+    <!-- Product Grid: 4 items per row -->
+    {% if listings %}
+    <div class="marketplace-product-grid">
+        {% for l in listings %}
+        <div class="product-card">
+            <div class="product-card-image-wrap">
+                {% if l.primary_image %}
+                    {% if l.primary_image.startswith('produce/') %}
+                        <img src="{{ url_for('static', filename='Images/' + l.primary_image) }}" alt="{{ l.crop_name }}" class="product-card-img">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='uploads/' + l.primary_image) }}" alt="{{ l.crop_name }}" class="product-card-img">
+                    {% endif %}
+                {% else %}
+                    <img src="{{ url_for('static', filename='Images/produce/maize.jpg') }}" alt="{{ l.crop_name }}" class="product-card-img">
+                {% endif %}
+            </div>
+            
+            <div class="product-card-body">
+                <h3 class="product-card-title">{{ l.crop_name }}</h3>
+                <div class="product-card-meta">
+                    <span>{{ l.county_name or l.location_text or 'Kenya' }}</span>
+                    <span class="meta-separator">&bull;</span>
+                    <span>{{ l.quantity_kg|int }}kg</span>
+                </div>
+                
+                <div class="product-card-pricing-row">
+                    <span class="product-price">KES {{ "{:,.0f}".format(l.quantity_kg * l.price_per_kg) }}</span>
+                    <span class="stock-badge">In Stock</span>
+                </div>
+
+                <div class="product-card-actions">
+                    <a href="{{ url_for('listing_detail', listing_id=l.id) }}" class="btn-add-to-cart">
+                        <span>Add to Cart</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="marketplace-pagination">
+        {% if page > 1 %}
+        <a href="{{ url_for('marketplace', page=page-1, **filters) }}" class="pagination-link">&larr; Prev</a>
+        {% endif %}
+        {% for p in range(1, total_pages+1) %}
+        <a href="{{ url_for('marketplace', page=p, **filters) }}" class="pagination-link {% if p == page %}active{% endif %}">{{ p }}</a>
+        {% endfor %}
+        {% if page < total_pages %}
+        <a href="{{ url_for('marketplace', page=page+1, **filters) }}" class="pagination-link">Next &rarr;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="marketplace-empty-card">
+        <div class="empty-icon-box">
+            <i data-lucide="shopping-bag"></i>
+        </div>
+        <h3>No produce listings found</h3>
+        <p>Try selecting a different category or county filter.</p>
+        <a href="{{ url_for('marketplace') }}" class="btn-clear-filters">Clear Filters</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

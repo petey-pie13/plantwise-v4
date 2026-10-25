@@ -1,0 +1,82 @@
+{% extends 'app_base.html' %}
+{% block title %}AI Farm Assistant - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>AI Farm Assistant 🤖</h1>
+        <p>Get personalized agronomic guidance backed by verified Kenyan agricultural research</p>
+    </div>
+    <form method="POST" action="{{ url_for('assistant_new_conversation') }}" style="margin: 0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary">
+            <i data-lucide="plus"></i> New Conversation
+        </button>
+    </form>
+</div>
+
+<div class="card" style="margin-bottom: 2rem; background: linear-gradient(135deg, rgba(22, 101, 52, 0.08) 0%, rgba(34, 197, 94, 0.05) 100%); border-left: 4px solid var(--primary, #15803d);">
+    <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <i data-lucide="shield-check" style="width: 28px; height: 28px; color: #166534; flex-shrink: 0; margin-top: 2px;"></i>
+        <div>
+            <h3 style="margin: 0 0 0.4rem 0; font-size: 1.05rem; color: #14532d;">Ground-Truth Evidence Engine</h3>
+            <p style="margin: 0; font-size: 0.9rem; color: #374151; line-height: 1.5;">
+                PlantWise AI Assistant retrieves facts from KALRO, KEPHIS, and Ministry of Agriculture research databases. Responses clearly differentiate verified knowledge-base facts from general agronomic guidance.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 600; margin: 0;">Your Consultations</h2>
+        <span class="badge badge-info">{{ conversations|length }} conversation{% if conversations|length != 1 %}s{% endif %}</span>
+    </div>
+
+    {% if conversations %}
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for conv in conversations %}
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; background: #fff; transition: transform 0.15s, border-color 0.15s;" onmouseover="this.style.borderColor='#15803d'" onmouseout="this.style.borderColor='#e5e7eb'">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(34, 197, 94, 0.12); display: flex; align-items: center; justify-content: center; color: #15803d;">
+                    <i data-lucide="message-square" style="width: 20px; height: 20px;"></i>
+                </div>
+                <div>
+                    <a href="{{ url_for('assistant_conversation', conv_id=conv.id) }}" style="font-weight: 600; font-size: 1.05rem; color: #111827; text-decoration: none;">
+                        {{ conv.title or 'Consultation #' ~ conv.id }}
+                    </a>
+                    <div style="font-size: 0.825rem; color: #6b7280; margin-top: 0.2rem;">
+                        <span>{{ conv.message_count }} message{% if conv.message_count != 1 %}s{% endif %}</span>
+                        <span style="margin: 0 0.4rem;">•</span>
+                        <span>Updated {{ conv.updated_at.strftime('%b %d, %Y at %H:%M') if conv.updated_at else 'Recently' }}</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="{{ url_for('assistant_conversation', conv_id=conv.id) }}" class="btn btn-sm btn-secondary">
+                    Open Chat
+                </a>
+                <form method="POST" action="{{ url_for('assistant_delete_conversation', conv_id=conv.id) }}" onsubmit="return confirm('Delete this consultation?');" style="margin: 0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete conversation" style="padding: 0.4rem 0.6rem;">
+                        <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: #6b7280;">
+        <i data-lucide="bot" style="width: 48px; height: 48px; color: #9ca3af; margin-bottom: 0.75rem;"></i>
+        <h3 style="font-size: 1.15rem; color: #374151; margin-bottom: 0.5rem;">No consultations yet</h3>
+        <p style="font-size: 0.9rem; max-width: 450px; margin: 0 auto 1.5rem auto;">Start a conversation with our AI Farm Assistant to ask about pests, disease diagnosis, fertiliser schedules, or market timing.</p>
+        <form method="POST" action="{{ url_for('assistant_new_conversation') }}" style="display: inline-block;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary">
+                <i data-lucide="sparkles"></i> Start Your First Consultation
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

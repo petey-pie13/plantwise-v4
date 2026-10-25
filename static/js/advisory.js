@@ -486,7 +486,8 @@ function populateReview() {
 function validateStep(step) {
     if (step === 1) {
         if (!document.getElementById('county').value) {
-            alert("Please select your county first.");
+            if (window.toast) toast.warning("Please select your county first.");
+            else console.warn("Please select your county first.");
             return false;
         }
     }
@@ -494,7 +495,8 @@ function validateStep(step) {
         const r = document.getElementById('rainfall').value || document.getElementById('rainfall-value').value;
         const t = document.getElementById('temperature').value || document.getElementById('temperature-value').value;
         if (!r || !t) {
-            alert("Please provide environmental conditions.");
+            if (window.toast) toast.warning("Please provide environmental conditions.");
+            else console.warn("Please provide environmental conditions.");
             return false;
         }
         // Sync values to form
@@ -526,9 +528,13 @@ async function submitAdvisory() {
     };
 
     try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const response = await fetch('/api/recommendations', {
             method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
             body:    JSON.stringify(formData)
         });
         
@@ -539,13 +545,15 @@ async function submitAdvisory() {
             sessionStorage.setItem('advisory_results', JSON.stringify(data));
             window.location.href = '/advisory/results';
         } else {
-            alert("Error: " + data.error);
+            if (window.toast) toast.error(data.error || "Could not generate recommendations.");
+            else console.warn("Error: " + data.error);
             btn.disabled  = false;
             btn.innerHTML = originalText;
         }
     } catch (err) {
         console.error("Submission failed:", err);
-        alert("Failed to connect to server. Please try again.");
+        if (window.toast) toast.error("We couldn't connect. Check your internet and try again.");
+        else console.warn("Failed to connect to server. Please try again.");
         btn.disabled  = false;
         btn.innerHTML = originalText;
     }

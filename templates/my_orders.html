@@ -1,0 +1,26 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}My Orders - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>My Orders</h1><p>Track your purchase history</p></div></div>
+{% if orders %}
+<div class="data-card">
+    <table class="data-table">
+        <thead><tr><th>Crop</th><th>Qty (kg)</th><th>Total (KES)</th><th>Seller</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>
+        {% for o in orders %}
+        <tr>
+            <td><strong>{{ o.crop_name }}</strong>{% if o.variety_name %}<br><span style="font-size:.8rem;color:var(--text-light);">{{ o.variety_name }}</span>{% endif %}</td>
+            <td>{{ o.quantity_kg }}</td>
+            <td>{{ "%.2f"|format(o.total_amount) }}</td>
+            <td>{{ o.seller_name }}</td>
+            <td><span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['pending','accepted'] %}badge-info{% elif o.status in ['dispatched'] %}badge-purple{% elif o.status in ['rejected','cancelled','disputed'] %}badge-error{% else %}badge-warning{% endif %}">{{ o.status }}</span></td>
+            <td style="font-size:.8rem;color:var(--text-light);">{{ o.created_at.strftime('%d %b %Y') if o.created_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state"><div class="empty-state-icon">📦</div><h3>No orders yet</h3><p>Browse the marketplace and place your first order.</p><a href="{{ url_for('marketplace') }}" class="btn btn-primary">Browse Marketplace</a></div>
+{% endif %}
+{% endblock %}

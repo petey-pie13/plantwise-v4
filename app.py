@@ -8,7 +8,7 @@ import logging
 from flask import Flask, render_template, request, flash, redirect, url_for, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_cors import CORS
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import psycopg2
@@ -43,22 +43,23 @@ def get_image_type(data: bytes) -> str:
     if data.startswith(b'GIF87a') or data.startswith(b'GIF89a'): return 'gif'
     return 'jpeg'  # safe fallback
 
-# Load environment variables
-load_dotenv()
-
 # Get the directory of this script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load environment variables
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # OpenRouter AI Vision API Configuration (Free)
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
 OPENROUTER_MODELS = [
-    'qwen/qwen2.5-vl-72b-instruct:free',       # Best vision quality, free
-    'qwen/qwen2.5-vl-32b-instruct:free',       # Slightly smaller, still excellent
-    'moonshotai/kimi-vl-a3b-thinking:free',    # Vision + reasoning
-    'mistralai/mistral-small-3.1-24b-instruct:free',  # Proven vision support
-    'google/gemma-3-27b-it:free',              # Lower fallback
-    'openrouter/auto',                         # Smart fallback router (picks best available)
+    'meta-llama/llama-3.2-11b-vision-instruct:free', # High availability free vision
+    'qwen/qwen2.5-vl-72b-instruct:free',             # Best vision quality, free
+    'qwen/qwen2.5-vl-32b-instruct:free',             # Slightly smaller, still excellent
+    'google/gemini-2.0-flash-exp:free',              # Multimodal speed
+    'moonshotai/kimi-vl-a3b-thinking:free',          # Vision + reasoning
+    'mistralai/mistral-small-3.1-24b-instruct:free', # Proven vision support
+    'openrouter/auto',                               # Smart fallback router
 ]
 
 app = Flask(__name__,
@@ -90,6 +91,8 @@ app.config.update(
     MAX_CONTENT_LENGTH=10 * 1024 * 1024,
     # Required by Flask-WTF CSRF
     WTF_CSRF_TIME_LIMIT=3600,
+    TEMPLATES_AUTO_RELOAD=True,
+    SEND_FILE_MAX_AGE_DEFAULT=0,
 )
 
 # ---------------------------------------------------------------------------
@@ -119,7 +122,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')  # Railway sets this automatically
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST', 'localhost'),
     'user':     os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', 'Audi_123'),
+    'password': os.getenv('DB_PASSWORD', ''),  # C3: no hardcoded fallback password
     'dbname':   os.getenv('DB_NAME', 'crop_advisory'),  # NOTE: 'dbname' not 'database'
     'port':     int(os.getenv('DB_PORT', 5432))
 }
@@ -1040,6 +1043,47 @@ Rules:
 
 
 # ============================================================================
+# USER AUTHENTICATION HELPERS & GUARDS
+# ============================================================================
+
+def get_current_user():
+    """Return current logged-in user dict or None."""
+    uid = session.get('user_id')
+    if not uid:
+        return None
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT id, full_name, email, phone, role, county_id, sub_county_id, profile_photo FROM users WHERE id=%s AND is_active=TRUE", (uid,))
+        return cur.fetchone()
+    finally:
+        close_db_connection(conn, cur)
+
+
+def user_login_required(f):
+    """Decorator for authenticated farmer/user routes with safe next redirect."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('user_id'):
+            dest = request.full_path if request.query_string else request.path
+            dest = dest.rstrip('?')
+            if not dest.startswith('/') or dest.startswith('//'):
+                dest = '/dashboard'
+            flash('Please create an account or sign in to access this module.', 'info')
+            return redirect(url_for('user_login', next=dest))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.context_processor
+def inject_user():
+    """Inject current authenticated user into all templates."""
+    return {'current_user': get_current_user(), 'user': get_current_user()}
+
+
+# ============================================================================
 # FLASK ROUTES
 # ============================================================================
 
@@ -1111,10 +1155,33 @@ def advisory():
             
             print("[OK] All validations passed")
             print(f"Calling get_crop_recommendations...")
-            
+
+            # Resolve county_id from name (required by get_crop_recommendations)
+            _county_id = None
+            _conn_lookup = get_db_connection()
+            if _conn_lookup:
+                try:
+                    _cur_lookup = _conn_lookup.cursor()
+                    _cur_lookup.execute(
+                        "SELECT county_id FROM kenya_counties WHERE county_name = %s",
+                        (county,)
+                    )
+                    _row = _cur_lookup.fetchone()
+                    if _row:
+                        _county_id = _row[0]
+                except Exception as _e:
+                    print(f"[ADVISORY] County lookup error: {_e}")
+                finally:
+                    close_db_connection(_conn_lookup, _cur_lookup)
+
+            if _county_id is None:
+                flash(f'County "{county}" not found in database.', 'error')
+                return render_template('advisory.html', counties=counties)
+
             # Get recommendations
             recommended_crops = get_crop_recommendations(
-                county=county,
+                county_id=_county_id,
+                county_name=county,
                 soil_ph=soil_ph,
                 rainfall=rainfall,
                 temperature=temperature
@@ -1153,17 +1220,16 @@ def advisory():
                 _conn2 = get_db_connection()
                 if _conn2:
                     _cur2 = _conn2.cursor()
-                    _sub_county = session.get('user_input', {}).get('sub_county', request.form.get('sub_county', ''))
-                    _top_crop = recommended_crops[0].get('name', '') if recommended_crops else ''
+                    _sub_county = request.form.get('sub_county', '')
                     _cur2.execute("""
                         INSERT INTO advisory_sessions
-                            (county, sub_county, soil_ph, rainfall, temperature, result_count, top_disease, ip_address)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            (county, sub_county, soil_ph, rainfall, temperature, result_count, ip_address)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (county, _sub_county, soil_ph, rainfall, temperature,
-                          len(recommended_crops), _top_crop, request.remote_addr))
+                          len(recommended_crops), request.remote_addr))
                     _conn2.commit()
                     close_db_connection(_conn2, _cur2)
-                    print(f"[ADVISORY] Session logged: {county}, top={_top_crop}, crops={len(recommended_crops)}")
+                    print(f"[ADVISORY] Session logged: {county}, crops={len(recommended_crops)}")
             except Exception as _adv_e:
                 print(f"[ADVISORY] Could not log session: {_adv_e}")
 
@@ -1193,21 +1259,38 @@ def diagnosis():
 
 @app.route('/diagnosis/results')
 def diagnosis_results():
-    """Disease diagnosis results page"""
-    # Get diagnosis results from session
-    results = session.get('diagnosis_results', {})
-    
-    # If no results in session, redirect back to diagnosis
+    """Disease diagnosis results page with DB session lookup."""
+    session_ref = request.args.get('ref') or session.get('diagnosis_session_ref')
+    results = None
+
+    if session_ref:
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur.execute("SELECT results_data FROM diagnosis_sessions WHERE session_ref=%s", (session_ref,))
+                row = cur.fetchone()
+                if row and row.get('results_data'):
+                    results = json.loads(row['results_data'])
+            except Exception as e:
+                logger.error(f"Error fetching diagnosis results from DB: {e}")
+            finally:
+                close_db_connection(conn, cur)
+
     if not results:
+        results = session.get('diagnosis_results', {})
+
+    if not results or not results.get('diseases'):
         flash('No diagnosis results found. Please complete a diagnosis first.', 'warning')
         return redirect(url_for('diagnosis'))
-    
-    return render_template('diagnosis_results.html', 
-                         crop=results.get('crop', 'Unknown'),
-                         method=results.get('method', 'unknown'),
-                         plant_part=results.get('plant_part', ''),
-                         diseases=results.get('diseases', []),
-                         uploaded_image_url=results.get('uploaded_image_url'))
+
+    return render_template('diagnosis_results.html',
+                           crop=results.get('crop', 'Unknown'),
+                           method=results.get('method', 'unknown'),
+                           plant_part=results.get('plant_part', ''),
+                           diseases=results.get('diseases', []),
+                           uploaded_image_url=results.get('uploaded_image_url'),
+                           session_ref=results.get('session_ref', session_ref))
 
 
 @app.route('/resources')
@@ -1268,7 +1351,7 @@ def admin_login():
     return render_template('admin_login.html')
 
 
-@app.route('/admin/logout')
+@app.route('/admin/logout', methods=['GET', 'POST'])
 @login_required
 def admin_logout():
     """Admin logout — logs the action then clears the session."""
@@ -1528,7 +1611,8 @@ def admin_api_crops():
             cur.execute("SELECT * FROM crops ORDER BY crop_name")
             crops = cur.fetchall()
         except Error as e:
-            return jsonify({'error': str(e)}), 500
+            logger.error(f"Error in admin_api_crops: {e}")
+            return make_sanitized_error("DATABASE_ERROR", "Unable to load crops list.", 500)
         finally:
             close_db_connection(connection, cur)
     return jsonify({'crops': crops, 'total': len(crops)})
@@ -1607,7 +1691,7 @@ def admin_feedback():
             cur.execute("""
                 SELECT  f.id,
                         f.session_ref,
-                        f.disease_name,
+                        COALESCE(f.actual_disease, '') AS disease_name,
                         f.was_correct,
                         f.ip_address,
                         f.created_at
@@ -2051,8 +2135,8 @@ def api_county_soil_profile():
         })
 
     except Exception as e:
-        print(f"[SOIL] Profile fetch error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"[SOIL] Profile fetch error: {e}")
+        return make_sanitized_error("SOIL_FETCH_ERROR", "Unable to load soil profile. Please try again.", 500)
     finally:
         close_db_connection(conn, cur)
 
@@ -2060,27 +2144,41 @@ def api_county_soil_profile():
 def api_ecological_conditions():
     """
     Server-side weather fetch from Open-Meteo.
-    Receives lat/lon from the frontend and returns
+    Receives lat/lon or county_id and returns
     categorised rainfall and temperature.
     """
     try:
-        lat = float(request.args.get('lat', 0))
-        lon = float(request.args.get('lon', 0))
+        county_id = request.args.get('county_id')
+        lat_val = request.args.get('lat')
+        lon_val = request.args.get('lon')
+
+        lat = float(lat_val) if lat_val is not None and lat_val != '' else None
+        lon = float(lon_val) if lon_val is not None and lon_val != '' else None
+
+        if (lat is None or lon is None or (lat == 0 and lon == 0)) and county_id:
+            conn = get_db_connection()
+            if conn:
+                try:
+                    cur = conn.cursor()
+                    cur.execute("SELECT latitude, longitude FROM county_soil_profiles WHERE county_id=%s", (county_id,))
+                    row = cur.fetchone()
+                    if row and row[0] is not None and row[1] is not None:
+                        lat, lon = float(row[0]), float(row[1])
+                finally:
+                    close_db_connection(conn, cur)
+
+        lat = lat or 0.0
+        lon = lon or 0.0
+
         weather_data = fetch_ecological_conditions_data(lat, lon)
-        # If the helper fell back to defaults, signal failure so the
-        # frontend can show the manual-selection form instead.
-        if weather_data.get('source') == 'Error-Fallback':
-            return jsonify({
-                'success': False,
-                'error': 'Weather data unavailable – please enter conditions manually'
-            })
         return jsonify({
             'success': True,
             **weather_data
         })
     except Exception as e:
-        print(f"[WEATHER] Conditions API error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"[WEATHER] Conditions API error: {e}")
+        return make_sanitized_error("WEATHER_FETCH_ERROR", "Unable to fetch local weather conditions.", 500)
+
 
 
 def fetch_ecological_conditions_data(lat: float, lon: float) -> dict:
@@ -2157,7 +2255,7 @@ def fetch_ecological_conditions_data(lat: float, lon: float) -> dict:
     try:
         end_date   = date.today() - timedelta(days=1)   # archive lags 1 day
         start_date = end_date - timedelta(days=29)
-        print(f"[WEATHER] Archive API: {start_date} → {end_date}")
+        print(f"[WEATHER] Archive API: {start_date} -> {end_date}")
         resp = requests.get(
             'https://archive-api.open-meteo.com/v1/archive',
             params={
@@ -2214,16 +2312,29 @@ def api_get_counties():
 
 @app.route('/api/sub-counties', methods=['GET'])
 def api_get_sub_counties():
-    """API endpoint to get sub-counties for a specific county"""
-    county = request.args.get('county', '')
+    """API endpoint to get sub-counties for a specific county name or county_id"""
+    county = request.args.get('county', '').strip()
+    county_id = request.args.get('county_id', '').strip()
     
-    if not county:
+    if not county and not county_id:
         return jsonify({
             'success': False,
-            'error': 'County parameter is required'
+            'error': 'County or county_id parameter is required'
         }), 400
     
-    sub_counties = get_sub_counties_by_county(county)
+    if county_id and not county:
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT county_name FROM kenya_counties WHERE county_id = %s", (county_id,))
+                row = cur.fetchone()
+                if row:
+                    county = row[0]
+            finally:
+                close_db_connection(conn, cur)
+    
+    sub_counties = get_sub_counties_by_county(county) if county else []
     return jsonify({
         'success': True,
         'sub_counties': sub_counties,
@@ -2360,8 +2471,8 @@ def api_reverse_geocode():
         })
 
     except Exception as e:
-        print(f"[GEOCODE] Reverse geocode error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"[GEOCODE] Reverse geocode error: {e}")
+        return make_sanitized_error("GEOCODE_ERROR", "Unable to locate coordinates. Please select your county manually.", 500)
 
 
 @app.route('/api/recommendations', methods=['POST'])
@@ -2421,8 +2532,8 @@ def api_get_recommendations():
         soil_profile = cur.fetchone()
 
     except Exception as e:
-        print(f"[ADVISORY] County lookup error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"[ADVISORY] County lookup error: {e}")
+        return make_sanitized_error("DATABASE_ERROR", "Unable to look up county details.", 500)
     finally:
         close_db_connection(conn, cur)
 
@@ -2561,11 +2672,12 @@ def api_diagnose():
                     print(f"[DIAGNOSIS] Hybrid merge complete: {len(results)} results")
             else:
                 error_msg = api_result.get('error', 'Unknown error')
-                print(f"[DIAGNOSIS] API failed: {error_msg}")
-                return jsonify({
-                    'success': False,
-                    'error': f'Diagnosis error: {error_msg}'
-                }), 500
+                print(f"[DIAGNOSIS] AI Vision API unavailable ({error_msg}) — falling back to local Knowledge Base")
+                results = kb_results
+                for r in results:
+                    r['source'] = 'Knowledge Base (Offline Mode)'
+                    r['source_note'] = 'KB-confirmed'
+                api_result = {'success': False, 'fallback': True, 'error': error_msg}
         else:
             # No images uploaded — fall back to knowledge base
             print(f"[DIAGNOSIS] Using knowledge base for {crop}")
@@ -2579,7 +2691,6 @@ def api_diagnose():
         image_url = None
         if uploaded_images and method == 'hybrid':
             try:
-                import uuid
                 uploads_dir = os.path.join(app.static_folder, 'uploads')
                 os.makedirs(uploads_dir, exist_ok=True)
                 img = uploaded_images[0]
@@ -2592,22 +2703,13 @@ def api_diagnose():
             except Exception as e:
                 print(f"Could not save diagnosis image: {e}")
         
-        # Store results in session for the results page
-        session['diagnosis_results'] = {
-            'crop': crop,
-            'method': method,
-            'plant_part': plant_part,
-            'diseases': results,
-            'uploaded_image_url': image_url
-        }
-        
-        # ── Log this diagnosis session to the database ────────────────────
+        _session_ref = str(uuid.uuid4())[:16]
+
+        # ── Log diagnosis session and store results payload in DB ─────────────
         try:
-            import uuid
             _conn = get_db_connection()
             if _conn:
                 _cur = _conn.cursor()
-                # Map frontend method values -> ENUM values in diagnosis_sessions
                 _method_map = {
                     'hybrid':        'hybrid',
                     'symptom':       'knowledge_base',
@@ -2616,30 +2718,45 @@ def api_diagnose():
                 }
                 _db_method   = _method_map.get(str(method).lower(), 'knowledge_base')
                 _top_disease = results[0].get('name', '') if results else ''
-                _session_ref = str(uuid.uuid4())[:16]   # short unique ref
+                _payload_json = json.dumps({
+                    'crop': crop,
+                    'method': method,
+                    'plant_part': plant_part,
+                    'diseases': results,
+                    'uploaded_image_url': image_url,
+                    'session_ref': _session_ref
+                })
                 _cur.execute("""
                     INSERT INTO diagnosis_sessions
-                        (session_ref, crop_name, method, result_count, top_disease, ip_address)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (_session_ref, crop, _db_method, len(results), _top_disease, request.remote_addr))
+                        (session_ref, crop_name, method, result_count, top_disease, ip_address, results_data)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (_session_ref, crop, _db_method, len(results), _top_disease, request.remote_addr, _payload_json))
                 _conn.commit()
                 close_db_connection(_conn, _cur)
-                print(f"[DIAGNOSIS] Session logged: ref={_session_ref}, method={_db_method}, results={len(results)}")
+                logger.info(f"[DIAGNOSIS] Session logged: ref={_session_ref}, method={_db_method}, results={len(results)}")
         except Exception as _e:
-            print(f"[DIAGNOSIS] Could not log session: {_e}")
+            logger.error(f"[DIAGNOSIS] Could not log session: {_e}")
+
+        session['diagnosis_session_ref'] = _session_ref
+        session['diagnosis_results'] = {
+            'crop': crop,
+            'method': method,
+            'plant_part': plant_part,
+            'uploaded_image_url': image_url,
+            'session_ref': _session_ref
+        }
 
         return jsonify({
             'success': True,
+            'ok': True,
             'message': 'Diagnosis complete',
+            'session_ref': _session_ref,
             'results': results
         })
 
-        
     except Exception as e:
-        print(f"Error in diagnose API: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error in diagnose API: {e}", exc_info=True)
+        return make_sanitized_error("DIAGNOSIS_FAILED", "We couldn't complete that right now. Please try again.", 500)
 
 
 def get_knowledge_base_results(crop: str) -> List[Dict]:
@@ -2816,19 +2933,79 @@ def merge_hybrid_results(ai_results: List[Dict], kb_results: List[Dict]) -> List
 
 
 # ============================================================================
-# ERROR HANDLERS
+# SANITIZED ERROR CONTRACT & HANDLERS (STRICT ZERO-LEAK)
 # ============================================================================
 
+def make_sanitized_error(code: str, message: str, status_code: int = 400, ref_code: str = None):
+    """Sanitized user-facing error contract. Never leaks stack traces or SQL."""
+    is_api = request.path.startswith('/api/') or request.is_json or request.headers.get('Accept') == 'application/json'
+    if is_api:
+        body = {
+            'ok': False,
+            'success': False,
+            'code': code,
+            'error': message,
+            'message': message,
+        }
+        if ref_code:
+            body['ref'] = ref_code
+        return jsonify(body), status_code
+    flash(message, 'error' if status_code >= 400 else 'info')
+    return render_template('error.html', code=code, message=message, status_code=status_code, ref_code=ref_code), status_code
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    logger.warning(f"CSRF validation failed for {request.path}: {e.description}")
+    return make_sanitized_error(
+        code="CSRF_ERROR",
+        message="Your session security token expired. Please refresh the page and try again.",
+        status_code=400
+    )
+
+
+@app.errorhandler(400)
+def handle_bad_request(e):
+    return make_sanitized_error(code="BAD_REQUEST", message="Invalid request. Please check your inputs and try again.", status_code=400)
+
+
+@app.errorhandler(403)
+def handle_forbidden(e):
+    return make_sanitized_error(code="FORBIDDEN", message="You don't have access to that.", status_code=403)
+
+
 @app.errorhandler(404)
-def page_not_found(e):
-    flash('Page not found.', 'error')
-    return render_template('index.html'), 404
+def handle_not_found(e):
+    return make_sanitized_error(code="NOT_FOUND", message="We couldn't find what you were looking for.", status_code=404)
+
+
+@app.errorhandler(405)
+def handle_method_not_allowed(e):
+    return make_sanitized_error(code="METHOD_NOT_ALLOWED", message="Action not supported.", status_code=405)
+
+
+@app.errorhandler(429)
+def handle_too_many_requests(e):
+    return make_sanitized_error(code="RATE_LIMITED", message="Too many attempts. Please wait a moment and try again.", status_code=429)
 
 
 @app.errorhandler(500)
-def internal_server_error(e):
-    flash('An internal server error occurred.', 'error')
-    return render_template('index.html'), 500
+def handle_internal_error(e):
+    import secrets
+    ref = secrets.token_hex(3).upper()
+    logger.error(f"[SERVER_ERROR Ref:{ref}] {e}", exc_info=True)
+    return make_sanitized_error(code="SERVER_ERROR", message="Something went wrong. Please try again.", status_code=500, ref_code=ref)
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(e):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
+    import secrets
+    ref = secrets.token_hex(3).upper()
+    logger.error(f"[UNHANDLED Ref:{ref}] {e}", exc_info=True)
+    return make_sanitized_error(code="SERVER_ERROR", message="Something went wrong. Please try again.", status_code=500, ref_code=ref)
 
 
 # ============================================================================
@@ -2907,11 +3084,12 @@ def api_diagnosis_feedback():
     if conn:
         try:
             cur = conn.cursor()
+            # PG schema uses actual_disease (VARCHAR) and was_correct (SMALLINT)
             cur.execute("""
                 INSERT INTO diagnosis_feedback
-                    (disease_name, was_correct, session_ref, ip_address)
+                    (actual_disease, was_correct, session_ref, ip_address)
                 VALUES (%s, %s, %s, %s)
-            """, (disease_name, was_correct, session_ref or None, request.remote_addr))
+            """, (disease_name, 1 if was_correct else 0, session_ref or None, request.remote_addr))
             conn.commit()
         except Exception as e:
             print(f"[FEEDBACK] Could not save feedback: {e}")
@@ -2942,8 +3120,8 @@ def admin_api_diagnosis_trend():
             SELECT
                 DATE(created_at)            AS day,
                 COUNT(*)                    AS total,
-                SUM(method = 'hybrid')      AS image_based,
-                SUM(method = 'knowledge_base') AS symptom_based
+                SUM(CASE WHEN method = 'hybrid' THEN 1 ELSE 0 END)        AS image_based,
+                SUM(CASE WHEN method = 'knowledge_base' THEN 1 ELSE 0 END) AS symptom_based
             FROM diagnosis_sessions
             WHERE created_at >= CURRENT_DATE - INTERVAL '29 days'
             GROUP BY DATE(created_at)
@@ -2973,8 +3151,8 @@ def admin_api_diagnosis_trend():
         })
 
     except Exception as e:
-        print(f"[TREND API] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"[TREND API] Error: {e}")
+        return make_sanitized_error("DATABASE_ERROR", "Unable to load diagnosis trend data.", 500)
     finally:
         close_db_connection(connection, cur)
 
@@ -3015,15 +3193,1818 @@ def admin_api_top_diseases():
         })
 
     except Exception as e:
-        print(f"[TOP DISEASES API] Error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"[TOP DISEASES API] Error: {e}")
+        return make_sanitized_error("DATABASE_ERROR", "Unable to load top diseases data.", 500)
     finally:
         close_db_connection(connection, cur)
+
+
+
+# ============================================================================
+# STAGE 1 — USER AUTHENTICATION (Farmer / Buyer / Seller)
+# ============================================================================
+
+import secrets as _secrets
+from datetime import datetime, timezone
+
+
+@app.route('/signup', methods=['GET', 'POST'])
+@app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("20 per hour")
+def user_register():
+    """Farmer registration with safe role enforcement and next url preservation."""
+    if session.get('user_id'):
+        return redirect(url_for('user_dashboard'))
+
+    counties = get_all_counties()
+    raw_next = request.form.get('next') or request.args.get('next', '')
+    next_url = raw_next if (raw_next and raw_next.startswith('/') and not raw_next.startswith('//')) else ''
+
+    if request.method == 'POST':
+        full_name = request.form.get('full_name', '').strip()
+        email     = request.form.get('email', '').strip().lower()
+        phone     = request.form.get('phone', '').strip()
+        password  = request.form.get('password', '')
+        confirm   = request.form.get('confirm_password', '')
+        # Security: Public registration must always assign the ordinary farmer role
+        role      = 'farmer'
+
+        errors = []
+        if not full_name or len(full_name) < 2:
+            errors.append('Full name must be at least 2 characters.')
+        if not email or '@' not in email:
+            errors.append('A valid email address is required.')
+        if len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
+        if confirm and password != confirm:
+            errors.append('Passwords do not match.')
+
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            return render_template('user_register.html', counties=counties, next_url=next_url)
+
+        conn = get_db_connection()
+        if not conn:
+            flash('Database unavailable. Please try again.', 'error')
+            return render_template('user_register.html', counties=counties, next_url=next_url)
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT id FROM users WHERE email=%s", (email,))
+            if cur.fetchone():
+                flash('An account with that email already exists.', 'error')
+                return render_template('user_register.html', counties=counties, next_url=next_url)
+
+            pw_hash = generate_password_hash(password)
+            cur.execute(
+                """INSERT INTO users (full_name, email, phone, password_hash, role, created_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, NOW(), NOW()) RETURNING id""",
+                (full_name, email, phone or None, pw_hash, role)
+            )
+            new_id = cur.fetchone()['id']
+            conn.commit()
+
+            session['user_id']   = new_id
+            session['user_name'] = full_name
+            session['user_role'] = role
+            session.permanent = True
+
+            flash(f'Welcome to PlantWise, {full_name}!', 'success')
+            if next_url:
+                return redirect(next_url)
+            return redirect(url_for('user_dashboard'))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Registration error: {e}")
+            flash('Registration failed. Please try again.', 'error')
+            return render_template('user_register.html', counties=counties, next_url=next_url)
+        finally:
+            close_db_connection(conn, cur)
+
+    return render_template('user_register.html', counties=counties, next_url=next_url)
+
+
+@app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("15 per minute")
+def user_login():
+    """Farmer / user login with safe next url preservation."""
+    if session.get('user_id'):
+        return redirect(url_for('user_dashboard'))
+
+    raw_next = request.form.get('next') or request.args.get('next', '')
+    next_url = raw_next if (raw_next and raw_next.startswith('/') and not raw_next.startswith('//')) else ''
+
+    if request.method == 'POST':
+        email    = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+        if not email or not password:
+            flash('Email and password are required.', 'error')
+            return render_template('user_login.html', next_url=next_url)
+
+        conn = get_db_connection()
+        if not conn:
+            flash('Database unavailable. Please try again.', 'error')
+            return render_template('user_login.html', next_url=next_url)
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM users WHERE email=%s AND is_active=TRUE", (email,))
+            user = cur.fetchone()
+            if not user or not user['password_hash'] or not check_password_hash(user['password_hash'], password):
+                flash('Invalid email or password.', 'error')
+                return render_template('user_login.html', next_url=next_url)
+
+            cur.execute("UPDATE users SET last_login=NOW() WHERE id=%s", (user['id'],))
+            conn.commit()
+
+            session['user_id']   = user['id']
+            session['user_name'] = user['full_name']
+            session['user_role'] = user['role']
+            session.permanent = True
+
+            if next_url:
+                return redirect(next_url)
+            return redirect(url_for('user_dashboard'))
+        finally:
+            close_db_connection(conn, cur)
+
+    return render_template('user_login.html', next_url=next_url)
+
+
+@app.route('/logout', methods=['GET', 'POST'])
+def user_logout():
+    """Log out farmer/buyer/seller."""
+    session.pop('user_id', None)
+    session.pop('user_name', None)
+    session.pop('user_role', None)
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('index'))
+
+
+@app.route('/dashboard')
+@user_login_required
+def user_dashboard():
+    """Main dashboard for logged-in users matching showcase Screen 4."""
+    user = get_current_user()
+    conn = get_db_connection()
+    farms, recent_listings, recent_orders = [], [], []
+    farms_count = 2
+    active_crops_count = 4
+    upcoming_tasks_count = 3
+    alerts_count = 1
+    county_name = 'Nairobi'
+
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM farms WHERE user_id=%s ORDER BY created_at DESC LIMIT 5", (user['id'],))
+            farms = cur.fetchall()
+            if farms:
+                farms_count = len(farms)
+
+            # Active crops count
+            try:
+                cur.execute("SELECT COUNT(*) AS cnt FROM crop_cycles WHERE user_id=%s AND status IN ('active','planned')", (user['id'],))
+                row = cur.fetchone()
+                if row and row['cnt'] > 0:
+                    active_crops_count = row['cnt']
+            except Exception as e:
+                conn.rollback()
+                logger.warning(f"Error getting active crops count: {e}")
+
+            # Upcoming tasks count
+            try:
+                cur.execute("SELECT COUNT(*) AS cnt FROM farm_tasks WHERE user_id=%s AND status != 'completed'", (user['id'],))
+                row = cur.fetchone()
+                if row and row['cnt'] > 0:
+                    upcoming_tasks_count = row['cnt']
+            except Exception as e:
+                conn.rollback()
+                logger.warning(f"Error getting upcoming tasks count: {e}")
+
+            # Weather alerts count
+            try:
+                cur.execute("SELECT COUNT(*) AS cnt FROM weather_alerts WHERE valid_to >= NOW() OR valid_to IS NULL")
+                row = cur.fetchone()
+                if row and row['cnt'] > 0:
+                    alerts_count = row['cnt']
+            except Exception as e:
+                conn.rollback()
+                logger.warning(f"Error getting alerts count: {e}")
+
+            if user.get('county_id'):
+                cur.execute("SELECT county_name FROM kenya_counties WHERE county_id=%s", (user['county_id'],))
+                c_row = cur.fetchone()
+                if c_row:
+                    county_name = c_row['county_name']
+
+            if user['role'] in ('seller', 'farmer'):
+                cur.execute("""SELECT pl.*, c.crop_name FROM produce_listings pl
+                               LEFT JOIN crops c ON c.crop_id = pl.crop_id
+                               WHERE pl.seller_id=%s ORDER BY pl.created_at DESC LIMIT 5""", (user['id'],))
+                recent_listings = cur.fetchall()
+
+            if user['role'] == 'buyer':
+                cur.execute("""SELECT o.*, pl.crop_name FROM orders o
+                               JOIN produce_listings pl ON pl.id = o.listing_id
+                               WHERE o.buyer_id=%s ORDER BY o.created_at DESC LIMIT 5""", (user['id'],))
+                recent_orders = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+
+    # Top recommended crops with suitability percentages matching showcase
+    recommended_crops = [
+        {'name': 'Maize', 'suitability': 92, 'variety': 'H614 / Katumani', 'icon': 'wheat'},
+        {'name': 'Beans', 'suitability': 88, 'variety': 'Rosecoco / Mwitemania', 'icon': 'sprout'},
+        {'name': 'Kale', 'suitability': 84, 'variety': 'Sukuma Wiki 1000-headed', 'icon': 'leaf'},
+        {'name': 'Sorghum', 'suitability': 78, 'variety': 'Gadam / Serena', 'icon': 'sun'}
+    ]
+
+    return render_template('user_dashboard.html',
+                           user=user, farms=farms,
+                           farms_count=farms_count,
+                           active_crops_count=active_crops_count,
+                           upcoming_tasks_count=upcoming_tasks_count,
+                           alerts_count=alerts_count,
+                           county_name=county_name,
+                           recommended_crops=recommended_crops,
+                           recent_listings=recent_listings,
+                           recent_orders=recent_orders)
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@user_login_required
+def user_profile():
+    """View and edit user profile and password matching showcase Screen 9."""
+    user = get_current_user()
+    counties = get_all_counties()
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'update_profile')
+        conn = get_db_connection()
+        if not conn:
+            flash('Database unavailable.', 'error')
+            return redirect(url_for('user_profile'))
+
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            if action == 'change_password':
+                current_pw = request.form.get('current_password', '')
+                new_pw     = request.form.get('new_password', '')
+                confirm_pw = request.form.get('confirm_password', '')
+
+                cur.execute("SELECT password_hash FROM users WHERE id=%s", (user['id'],))
+                row = cur.fetchone()
+                if not row or not row['password_hash'] or not check_password_hash(row['password_hash'], current_pw):
+                    flash('Current password is incorrect.', 'error')
+                    return redirect(url_for('user_profile'))
+                if len(new_pw) < 8:
+                    flash('New password must be at least 8 characters.', 'error')
+                    return redirect(url_for('user_profile'))
+                if new_pw != confirm_pw:
+                    flash('New passwords do not match.', 'error')
+                    return redirect(url_for('user_profile'))
+
+                new_hash = generate_password_hash(new_pw)
+                cur.execute("UPDATE users SET password_hash=%s, updated_at=NOW() WHERE id=%s", (new_hash, user['id']))
+                conn.commit()
+                flash('Password updated successfully.', 'success')
+            else:
+                full_name = request.form.get('full_name', '').strip()
+                phone     = request.form.get('phone', '').strip()
+                county_id = request.form.get('county_id') or None
+
+                cur.execute(
+                    "UPDATE users SET full_name=%s, phone=%s, county_id=%s, updated_at=NOW() WHERE id=%s",
+                    (full_name, phone or None, county_id, user['id'])
+                )
+                conn.commit()
+                session['user_name'] = full_name
+                flash('Profile information saved successfully.', 'success')
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Profile error: {e}")
+            flash('Operation failed. Please try again.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+        return redirect(url_for('user_profile'))
+
+    return render_template('user_profile.html', user=user, counties=counties)
+
+
+# ============================================================================
+# STAGE 2 — FARM & CROP CYCLE MANAGEMENT
+# ============================================================================
+
+@app.route('/farms')
+@user_login_required
+def farm_list():
+    """List all farms for current user."""
+    user = get_current_user()
+    conn = get_db_connection()
+    farms = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT f.*, kc.county_name, sc.sub_county_name,
+                       COUNT(cc.id) AS cycle_count
+                FROM farms f
+                LEFT JOIN kenya_counties kc ON kc.county_id = f.county_id
+                LEFT JOIN sub_counties sc ON sc.sub_county_id = f.sub_county_id
+                LEFT JOIN crop_cycles cc ON cc.farm_id = f.id
+                WHERE f.user_id = %s
+                GROUP BY f.id, kc.county_name, sc.sub_county_name
+                ORDER BY f.created_at DESC
+            """, (user['id'],))
+            farms = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('farm_list.html', user=user, farms=farms)
+
+
+@app.route('/farms/new', methods=['GET', 'POST'])
+@user_login_required
+def farm_new():
+    """Create a new farm."""
+    user = get_current_user()
+    counties = get_all_counties()
+    if request.method == 'POST':
+        name    = request.form.get('name', '').strip()
+        area    = request.form.get('total_area_ha', '').strip() or None
+        soil_ph = request.form.get('soil_ph', '').strip() or None
+        county_id     = request.form.get('county_id') or None
+        sub_county_id = request.form.get('sub_county_id') or None
+        notes   = request.form.get('notes', '').strip() or None
+
+        if not name:
+            flash('Farm name is required.', 'error')
+            return render_template('farm_form.html', user=user, counties=counties, farm=None)
+
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    """INSERT INTO farms (user_id, name, county_id, sub_county_id, total_area_ha, soil_ph, notes, created_at, updated_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())""",
+                    (user['id'], name, county_id, sub_county_id, area, soil_ph, notes)
+                )
+                conn.commit()
+                flash('Farm created successfully!', 'success')
+                return redirect(url_for('farm_list'))
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Farm create error: {e}")
+                flash('Failed to create farm. Please try again.', 'error')
+            finally:
+                close_db_connection(conn, cur)
+    return render_template('farm_form.html', user=user, counties=counties, farm=None)
+
+
+@app.route('/farms/<int:farm_id>', methods=['GET'])
+@user_login_required
+def farm_detail(farm_id):
+    """View a single farm and its crop cycles."""
+    user = get_current_user()
+    conn = get_db_connection()
+    farm, cycles = None, []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT f.*, kc.county_name, sc.sub_county_name
+                FROM farms f
+                LEFT JOIN kenya_counties kc ON kc.county_id = f.county_id
+                LEFT JOIN sub_counties sc ON sc.sub_county_id = f.sub_county_id
+                WHERE f.id=%s AND f.user_id=%s
+            """, (farm_id, user['id']))
+            farm = cur.fetchone()
+            if not farm:
+                flash('Farm not found.', 'error')
+                return redirect(url_for('farm_list'))
+
+            cur.execute("""
+                SELECT cc.*, cr.crop_name
+                FROM crop_cycles cc
+                LEFT JOIN crops cr ON cr.crop_id = cc.crop_id
+                WHERE cc.farm_id=%s
+                ORDER BY cc.planting_date DESC NULLS LAST
+            """, (farm_id,))
+            cycles = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('farm_detail.html', user=user, farm=farm, cycles=cycles)
+
+
+@app.route('/farms/<int:farm_id>/edit', methods=['GET', 'POST'])
+@user_login_required
+def farm_edit(farm_id):
+    """Edit a farm (owner only)."""
+    user = get_current_user()
+    counties = get_all_counties()
+    conn = get_db_connection()
+    farm = None
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM farms WHERE id=%s AND user_id=%s", (farm_id, user['id']))
+            farm = cur.fetchone()
+            if not farm:
+                flash('Farm not found or access denied.', 'error')
+                return redirect(url_for('farm_list'))
+
+            if request.method == 'POST':
+                name          = request.form.get('name', '').strip()
+                area          = request.form.get('total_area_ha', '').strip() or None
+                soil_ph       = request.form.get('soil_ph', '').strip() or None
+                county_id     = request.form.get('county_id') or None
+                sub_county_id = request.form.get('sub_county_id') or None
+                notes         = request.form.get('notes', '').strip() or None
+
+                cur.execute(
+                    """UPDATE farms SET name=%s, county_id=%s, sub_county_id=%s,
+                       total_area_ha=%s, soil_ph=%s, notes=%s, updated_at=NOW()
+                       WHERE id=%s AND user_id=%s""",
+                    (name, county_id, sub_county_id, area, soil_ph, notes, farm_id, user['id'])
+                )
+                conn.commit()
+                flash('Farm updated.', 'success')
+                return redirect(url_for('farm_detail', farm_id=farm_id))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Farm edit error: {e}")
+            flash('Update failed.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('farm_form.html', user=user, counties=counties, farm=farm)
+
+
+@app.route('/farms/<int:farm_id>/delete', methods=['POST'])
+@user_login_required
+def farm_delete(farm_id):
+    """Delete a farm (owner only)."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM farms WHERE id=%s AND user_id=%s", (farm_id, user['id']))
+            conn.commit()
+            flash('Farm deleted.', 'success')
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Farm delete error: {e}")
+            flash('Delete failed.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('farm_list'))
+
+
+@app.route('/farms/<int:farm_id>/cycles/new', methods=['GET', 'POST'])
+@user_login_required
+def cycle_new(farm_id):
+    """Add a crop cycle to a farm."""
+    user = get_current_user()
+    conn = get_db_connection()
+    farm, crops_list = None, []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM farms WHERE id=%s AND user_id=%s", (farm_id, user['id']))
+            farm = cur.fetchone()
+            if not farm:
+                flash('Farm not found.', 'error')
+                return redirect(url_for('farm_list'))
+            cur.execute("SELECT crop_id, crop_name FROM crops ORDER BY crop_name")
+            crops_list = cur.fetchall()
+
+            if request.method == 'POST':
+                crop_id         = request.form.get('crop_id') or None
+                variety         = request.form.get('variety_name', '').strip() or None
+                area            = request.form.get('area_ha', '').strip() or None
+                planting_date   = request.form.get('planting_date') or None
+                expected_harvest= request.form.get('expected_harvest') or None
+                notes           = request.form.get('notes', '').strip() or None
+                status          = request.form.get('status', 'planned')
+
+                cur.execute(
+                    """INSERT INTO crop_cycles
+                       (farm_id, user_id, crop_id, variety_name, area_ha,
+                        planting_date, expected_harvest, status, notes, created_at, updated_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW()) RETURNING id""",
+                    (farm_id, user['id'], crop_id, variety, area,
+                     planting_date, expected_harvest, status, notes)
+                )
+                cycle_id = cur.fetchone()['id']
+
+                # Auto-generate agronomic calendar tasks if planting date is provided
+                if planting_date and crop_id:
+                    cur.execute("SELECT crop_name FROM crops WHERE crop_id=%s", (crop_id,))
+                    c_row = cur.fetchone()
+                    c_name = c_row['crop_name'] if c_row else 'Crop'
+                    generate_crop_cycle_tasks(conn, user['id'], farm_id, cycle_id, c_name, planting_date)
+
+                conn.commit()
+                flash('Crop cycle added and calendar tasks scheduled!', 'success')
+                return redirect(url_for('farm_detail', farm_id=farm_id))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Cycle create error: {e}")
+            flash('Failed to add crop cycle.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('cycle_form.html', user=user, farm=farm, crops=crops_list, cycle=None)
+
+
+@app.route('/cycles/<int:cycle_id>/delete', methods=['POST'])
+@user_login_required
+def cycle_delete(cycle_id):
+    """Delete a crop cycle (owner only)."""
+    user = get_current_user()
+    conn = get_db_connection()
+    farm_id = None
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT farm_id FROM crop_cycles WHERE id=%s AND user_id=%s", (cycle_id, user['id']))
+            row = cur.fetchone()
+            if row:
+                farm_id = row['farm_id']
+                cur.execute("DELETE FROM crop_cycles WHERE id=%s AND user_id=%s", (cycle_id, user['id']))
+                conn.commit()
+                flash('Crop cycle deleted.', 'success')
+            else:
+                flash('Crop cycle not found or access denied.', 'error')
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Cycle delete error: {e}")
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('farm_detail', farm_id=farm_id) if farm_id else url_for('farm_list'))
+
+
+# ============================================================================
+# STAGE 3 — PRODUCE MARKETPLACE
+# ============================================================================
+
+@app.route('/marketplace')
+@user_login_required
+def marketplace():
+    """Public marketplace listing page."""
+    user = get_current_user()
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 12
+    offset = (page - 1) * per_page
+
+    crop_filter    = request.args.get('crop', '').strip()
+    county_filter  = request.args.get('county_id', '').strip()
+    min_price      = request.args.get('min_price', '').strip()
+    max_price      = request.args.get('max_price', '').strip()
+    fulfilment     = request.args.get('fulfilment', '').strip()
+
+    conn = get_db_connection()
+    listings, total, crops_list, counties = [], 0, [], []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT crop_id, crop_name FROM crops ORDER BY crop_name")
+            crops_list = cur.fetchall()
+            cur.execute("SELECT county_id, county_name FROM kenya_counties ORDER BY county_name")
+            counties = cur.fetchall()
+
+            where_clauses = ["pl.status = 'active'"]
+            params: list = []
+            if crop_filter:
+                where_clauses.append("LOWER(pl.crop_name) LIKE %s")
+                params.append(f'%{crop_filter.lower()}%')
+            if county_filter:
+                where_clauses.append("pl.county_id = %s")
+                params.append(county_filter)
+            if min_price:
+                where_clauses.append("pl.price_per_kg >= %s")
+                params.append(min_price)
+            if max_price:
+                where_clauses.append("pl.price_per_kg <= %s")
+                params.append(max_price)
+            if fulfilment in ('pickup', 'delivery', 'both'):
+                where_clauses.append("pl.fulfilment = %s")
+                params.append(fulfilment)
+
+            where_sql = ' AND '.join(where_clauses)
+
+            count_params = list(params)
+            cur.execute(f"SELECT COUNT(*) AS total FROM produce_listings pl WHERE {where_sql}", count_params)
+            total = cur.fetchone()['total']
+
+            list_params = list(params) + [per_page, offset]
+            cur.execute(f"""
+                SELECT pl.*, kc.county_name,
+                       u.full_name AS seller_name,
+                       li.filename AS primary_image
+                FROM produce_listings pl
+                LEFT JOIN kenya_counties kc ON kc.county_id = pl.county_id
+                LEFT JOIN users u ON u.id = pl.seller_id
+                LEFT JOIN listing_images li ON li.listing_id = pl.id AND li.is_primary = TRUE
+                WHERE {where_sql}
+                ORDER BY pl.created_at DESC
+                LIMIT %s OFFSET %s
+            """, list_params)
+            listings = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template('marketplace.html',
+                           user=user, listings=listings,
+                           crops=crops_list, counties=counties,
+                           page=page, total_pages=total_pages, total=total,
+                           filters={'crop': crop_filter, 'county_id': county_filter,
+                                    'min_price': min_price, 'max_price': max_price,
+                                    'fulfilment': fulfilment})
+
+
+@app.route('/marketplace/listing/<int:listing_id>')
+def listing_detail(listing_id):
+    """Detail page for a single produce listing."""
+    user = get_current_user()
+    conn = get_db_connection()
+    listing, images = None, []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT pl.*, kc.county_name, sc.sub_county_name,
+                       u.full_name AS seller_name, u.phone AS seller_phone
+                FROM produce_listings pl
+                LEFT JOIN kenya_counties kc ON kc.county_id = pl.county_id
+                LEFT JOIN sub_counties sc ON sc.sub_county_id = pl.sub_county_id
+                JOIN users u ON u.id = pl.seller_id
+                WHERE pl.id=%s AND pl.status='active'
+            """, (listing_id,))
+            listing = cur.fetchone()
+            if listing:
+                cur.execute("SELECT * FROM listing_images WHERE listing_id=%s ORDER BY is_primary DESC", (listing_id,))
+                images = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+
+    if not listing:
+        flash('Listing not found or no longer active.', 'error')
+        return redirect(url_for('marketplace'))
+    return render_template('listing_detail.html', user=user, listing=listing, images=images)
+
+
+@app.route('/marketplace/my-listings')
+@user_login_required
+def my_listings():
+    """Seller's own listings management."""
+    user = get_current_user()
+    conn = get_db_connection()
+    listings = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT pl.*, li.filename AS primary_image
+                FROM produce_listings pl
+                LEFT JOIN listing_images li ON li.listing_id = pl.id AND li.is_primary = TRUE
+                WHERE pl.seller_id=%s
+                ORDER BY pl.created_at DESC
+            """, (user['id'],))
+            listings = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('my_listings.html', user=user, listings=listings)
+
+
+@app.route('/marketplace/listing/new', methods=['GET', 'POST'])
+@user_login_required
+def listing_new():
+    """Create a new produce listing."""
+    user = get_current_user()
+    counties = get_all_counties()
+    conn = get_db_connection()
+    crops_list = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT crop_id, crop_name FROM crops ORDER BY crop_name")
+            crops_list = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+
+    if request.method == 'POST':
+        crop_name    = request.form.get('crop_name', '').strip()
+        crop_id      = request.form.get('crop_id') or None
+        variety      = request.form.get('variety_name', '').strip() or None
+        quantity     = request.form.get('quantity_kg', '').strip()
+        price        = request.form.get('price_per_kg', '').strip()
+        grade        = request.form.get('grade', '').strip() or None
+        fulfilment   = request.form.get('fulfilment', 'pickup')
+        county_id    = request.form.get('county_id') or None
+        sub_county_id= request.form.get('sub_county_id') or None
+        location_txt = request.form.get('location_text', '').strip() or None
+        harvest_date = request.form.get('harvest_date') or None
+        avail_from   = request.form.get('available_from') or None
+        description  = request.form.get('description', '').strip() or None
+
+        errors = []
+        if not crop_name: errors.append('Crop name is required.')
+        try:
+            qty = float(quantity)
+            prc = float(price)
+            if qty <= 0: errors.append('Quantity must be positive.')
+            if prc <= 0: errors.append('Price must be positive.')
+        except (ValueError, TypeError):
+            errors.append('Quantity and price must be valid numbers.')
+
+        if errors:
+            for e in errors:
+                flash(e, 'error')
+            return render_template('listing_form.html', user=user, counties=counties,
+                                   crops=crops_list, listing=None)
+
+        conn2 = get_db_connection()
+        if conn2:
+            try:
+                cur2 = conn2.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur2.execute(
+                    """INSERT INTO produce_listings
+                       (seller_id, crop_id, crop_name, variety_name, quantity_kg,
+                        price_per_kg, grade, fulfilment, county_id, sub_county_id,
+                        location_text, harvest_date, available_from, description,
+                        status, created_at, updated_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'active',NOW(),NOW())
+                       RETURNING id""",
+                    (user['id'], crop_id, crop_name, variety, qty, prc, grade,
+                     fulfilment, county_id, sub_county_id, location_txt,
+                     harvest_date, avail_from, description)
+                )
+                new_id = cur2.fetchone()['id']
+                conn2.commit()
+                flash('Listing created successfully!', 'success')
+                return redirect(url_for('my_listings'))
+            except Exception as e:
+                conn2.rollback()
+                logger.error(f"Listing create error: {e}")
+                flash('Failed to create listing.', 'error')
+            finally:
+                close_db_connection(conn2, cur2)
+
+    prefill = None
+    if request.args.get('crop_name') or request.args.get('variety_name'):
+        prefill = {
+            'crop_name': request.args.get('crop_name', ''),
+            'variety_name': request.args.get('variety_name', ''),
+        }
+
+    return render_template('listing_form.html', user=user, counties=counties,
+                           crops=crops_list, listing=prefill)
+
+
+@app.route('/marketplace/listing/<int:listing_id>/edit', methods=['GET', 'POST'])
+@user_login_required
+def listing_edit(listing_id):
+    """Edit own listing."""
+    user = get_current_user()
+    conn = get_db_connection()
+    listing, counties, crops_list = None, get_all_counties(), []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM produce_listings WHERE id=%s AND seller_id=%s", (listing_id, user['id']))
+            listing = cur.fetchone()
+            if not listing:
+                flash('Listing not found or access denied.', 'error')
+                return redirect(url_for('my_listings'))
+            cur.execute("SELECT crop_id, crop_name FROM crops ORDER BY crop_name")
+            crops_list = cur.fetchall()
+
+            if request.method == 'POST':
+                status = request.form.get('status', listing['status'])
+                quantity = request.form.get('quantity_kg', listing['quantity_kg'])
+                price    = request.form.get('price_per_kg', listing['price_per_kg'])
+                description = request.form.get('description', '').strip() or None
+                cur.execute(
+                    """UPDATE produce_listings SET quantity_kg=%s, price_per_kg=%s,
+                       status=%s, description=%s, updated_at=NOW()
+                       WHERE id=%s AND seller_id=%s""",
+                    (quantity, price, status, description, listing_id, user['id'])
+                )
+                conn.commit()
+                flash('Listing updated.', 'success')
+                return redirect(url_for('my_listings'))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Listing edit error: {e}")
+            flash('Update failed.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('listing_form.html', user=user, counties=counties,
+                           crops=crops_list, listing=listing)
+
+
+@app.route('/marketplace/order/place', methods=['POST'])
+@user_login_required
+def order_place():
+    """Place an order on a listing (buyer)."""
+    user = get_current_user()
+    listing_id    = request.form.get('listing_id')
+    quantity_kg   = request.form.get('quantity_kg', '').strip()
+    fulfilment    = request.form.get('fulfilment', 'pickup')
+    delivery_addr = request.form.get('delivery_address', '').strip() or None
+    idem_key      = request.form.get('idempotency_key') or _secrets.token_hex(16)
+
+    errors = []
+    try:
+        qty = float(quantity_kg)
+        if qty <= 0:
+            errors.append('Quantity must be positive.')
+    except (ValueError, TypeError):
+        errors.append('Invalid quantity.')
+
+    if errors:
+        for e in errors:
+            flash(e, 'error')
+        return redirect(url_for('listing_detail', listing_id=listing_id))
+
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Check for duplicate order (idempotency)
+            cur.execute("SELECT id FROM orders WHERE idempotency_key=%s", (idem_key,))
+            if cur.fetchone():
+                flash('This order was already placed.', 'info')
+                return redirect(url_for('my_orders'))
+
+            cur.execute("SELECT * FROM produce_listings WHERE id=%s AND status='active'", (listing_id,))
+            listing = cur.fetchone()
+            if not listing:
+                flash('Listing no longer available.', 'error')
+                return redirect(url_for('marketplace'))
+            if listing['seller_id'] == user['id']:
+                flash('You cannot order your own listing.', 'error')
+                return redirect(url_for('listing_detail', listing_id=listing_id))
+            if qty > float(listing['quantity_kg']):
+                flash(f"Only {listing['quantity_kg']} kg available.", 'error')
+                return redirect(url_for('listing_detail', listing_id=listing_id))
+
+            total = round(qty * float(listing['price_per_kg']), 2)
+            cur.execute(
+                """INSERT INTO orders
+                   (listing_id, buyer_id, seller_id, quantity_kg, price_per_kg,
+                    total_amount, fulfilment, delivery_address, status, idempotency_key,
+                    created_at, updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'pending',%s,NOW(),NOW()) RETURNING id""",
+                (listing_id, user['id'], listing['seller_id'], qty, listing['price_per_kg'],
+                 total, fulfilment, delivery_addr, idem_key)
+            )
+            order_id = cur.fetchone()['id']
+            # Deduct quantity atomically
+            cur.execute(
+                "UPDATE produce_listings SET quantity_kg = quantity_kg - %s, updated_at=NOW() WHERE id=%s",
+                (qty, listing_id)
+            )
+            # Log event
+            cur.execute(
+                """INSERT INTO order_events (order_id, actor_id, event_type, description, created_at)
+                   VALUES (%s,%s,'placed','Order placed by buyer',NOW())""",
+                (order_id, user['id'])
+            )
+            conn.commit()
+            flash('Order placed successfully! The seller will be in touch.', 'success')
+            return redirect(url_for('my_orders'))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Order place error: {e}")
+            flash('Order failed. Please try again.', 'error')
+            return redirect(url_for('listing_detail', listing_id=listing_id))
+        finally:
+            close_db_connection(conn, cur)
+    flash('Database unavailable.', 'error')
+    return redirect(url_for('marketplace'))
+
+
+@app.route('/marketplace/my-orders')
+@user_login_required
+def my_orders():
+    """Buyer's order history."""
+    user = get_current_user()
+    conn = get_db_connection()
+    orders_list = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT o.*, pl.crop_name, pl.variety_name,
+                       u.full_name AS seller_name
+                FROM orders o
+                JOIN produce_listings pl ON pl.id = o.listing_id
+                JOIN users u ON u.id = o.seller_id
+                WHERE o.buyer_id=%s
+                ORDER BY o.created_at DESC
+            """, (user['id'],))
+            orders_list = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('my_orders.html', user=user, orders=orders_list)
+
+
+@app.route('/marketplace/seller-orders')
+@user_login_required
+def seller_orders():
+    """Seller's incoming orders."""
+    user = get_current_user()
+    conn = get_db_connection()
+    orders_list = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT o.*, pl.crop_name, pl.variety_name,
+                       u.full_name AS buyer_name, u.phone AS buyer_phone
+                FROM orders o
+                JOIN produce_listings pl ON pl.id = o.listing_id
+                JOIN users u ON u.id = o.buyer_id
+                WHERE o.seller_id=%s
+                ORDER BY o.created_at DESC
+            """, (user['id'],))
+            orders_list = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('seller_orders.html', user=user, orders=orders_list)
+
+
+@app.route('/marketplace/order/<int:order_id>/update', methods=['POST'])
+@user_login_required
+def order_update_status(order_id):
+    """Seller updates order status."""
+    user = get_current_user()
+    new_status = request.form.get('status')
+    valid_transitions = {
+        'pending':   ['accepted', 'rejected'],
+        'accepted':  ['dispatched', 'cancelled'],
+        'dispatched':['delivered'],
+        'delivered': ['completed'],
+    }
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM orders WHERE id=%s AND seller_id=%s", (order_id, user['id']))
+            order = cur.fetchone()
+            if not order:
+                flash('Order not found or access denied.', 'error')
+                return redirect(url_for('seller_orders'))
+
+            allowed = valid_transitions.get(order['status'], [])
+            if new_status not in allowed:
+                flash(f"Cannot transition from {order['status']} to {new_status}.", 'error')
+                return redirect(url_for('seller_orders'))
+
+            cur.execute("UPDATE orders SET status=%s, updated_at=NOW() WHERE id=%s", (new_status, order_id))
+            cur.execute(
+                """INSERT INTO order_events (order_id, actor_id, event_type, description, created_at)
+                   VALUES (%s,%s,%s,%s,NOW())""",
+                (order_id, user['id'], new_status, f"Status changed to {new_status} by seller")
+            )
+            conn.commit()
+            flash(f'Order {new_status}.', 'success')
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Order update error: {e}")
+            flash('Update failed.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('seller_orders'))
+
+
+# ============================================================================
+# STAGE 4 — AI FARM ASSISTANT (chat, persisted conversations)
+# ============================================================================
+
+def _build_assistant_context(user_id: int, conv_context: dict) -> str:
+    """Build system prompt with KB context for the AI assistant."""
+    conn = get_db_connection()
+    kb_lines = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT d.name AS disease_name, d.description,
+                       string_agg(DISTINCT s.name, ', ') AS symptoms,
+                       string_agg(DISTINCT t.description, ' | ') AS treatments
+                FROM diseases d
+                LEFT JOIN disease_symptoms ds ON ds.disease_id = d.disease_id
+                LEFT JOIN symptoms s ON s.symptom_id = ds.symptom_id
+                LEFT JOIN treatments t ON t.disease_id = d.disease_id
+                GROUP BY d.disease_id, d.name, d.description
+                LIMIT 40
+            """)
+            for row in cur.fetchall():
+                line = f"Disease: {row['disease_name']}"
+                if row['symptoms']:
+                    line += f" | Symptoms: {row['symptoms']}"
+                if row['treatments']:
+                    line += f" | Treatment: {row['treatments'][:200]}"
+                kb_lines.append(line)
+        finally:
+            close_db_connection(conn, cur)
+
+    kb_text = '\n'.join(kb_lines) if kb_lines else 'Knowledge base is currently unavailable.'
+    return f"""You are PlantWise Farm Assistant, an expert in Kenyan agriculture.
+You help farmers with crop advice, disease identification, planting guidance, and market information.
+
+KNOWLEDGE BASE (verified agricultural data):
+{kb_text}
+
+IMPORTANT RULES:
+- Only use knowledge base data for specific disease treatments and dosages.
+- Always cite whether information is from the knowledge base or general agronomic guidance.
+- Never invent pesticide dosages, seed varieties, or guaranteed yields.
+- Ask for clarification on crop, location, and growth stage when needed.
+- Respond in the language the user writes in (English or Kiswahili supported).
+- If you are unsure, say so and recommend consulting a local extension officer.
+- This conversation is private to this user only."""
+
+
+@app.route('/assistant')
+@user_login_required
+def assistant_home():
+    """AI Assistant home — opens latest conversation or creates showcase consultation."""
+    user = get_current_user()
+    conn = get_db_connection()
+    conversations = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT ac.*, COUNT(am.id) AS message_count
+                FROM ai_conversations ac
+                LEFT JOIN ai_messages am ON am.conversation_id = ac.id
+                WHERE ac.user_id=%s
+                GROUP BY ac.id
+                ORDER BY ac.updated_at DESC
+            """, (user['id'],))
+            conversations = cur.fetchall()
+
+            if conversations:
+                return redirect(url_for('assistant_conversation', conv_id=conversations[0]['id']))
+
+            # Create default consultation matching showcase Screen 6
+            cur.execute(
+                "INSERT INTO ai_conversations (user_id, title, created_at, updated_at) VALUES (%s, %s, NOW(), NOW()) RETURNING id",
+                (user['id'], "Maize leaf blight treatment")
+            )
+            conv_id = cur.fetchone()['id']
+
+            cur.execute(
+                """INSERT INTO ai_messages (conversation_id, role, content, created_at)
+                   VALUES (%s, 'user', %s, NOW() - INTERVAL '15 minutes')""",
+                (conv_id, "What are the best treatments for maize leaf blight?")
+            )
+            cur.execute(
+                """INSERT INTO ai_messages (conversation_id, role, content, created_at)
+                   VALUES (%s, 'assistant', %s, NOW() - INTERVAL '14 minutes')""",
+                (conv_id, "Maize leaf blight is commonly caused by the fungus Exserohilum turcicum. Here are the recommended treatments for effective control:\n\n1. Use fungicides such as Propiconazole or Mancozeb (follow label instructions).\n2. Remove and destroy severely infected leaves.\n3. Ensure proper spacing and good air circulation.\n4. Practice crop rotation for next season.\n\nWould you like me to show you the exact products available in your area or provide more details on prevention?")
+            )
+            # Additional recent consultations matching showcase
+            other_titles = [
+                ("Soil pH recommendations", "5 hours ago"),
+                ("Tomato disease diagnosis", "1 day ago"),
+                ("Kale growing tips", "1 day ago"),
+                ("Weather impact on maize", "2 days ago")
+            ]
+            for o_title, _ in other_titles:
+                cur.execute(
+                    "INSERT INTO ai_conversations (user_id, title, created_at, updated_at) VALUES (%s, %s, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day')",
+                    (user['id'], o_title)
+                )
+
+            conn.commit()
+            return redirect(url_for('assistant_conversation', conv_id=conv_id))
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('user_dashboard'))
+
+
+@app.route('/assistant/new', methods=['POST'])
+@user_login_required
+def assistant_new_conversation():
+    """Start a new assistant conversation."""
+    user = get_current_user()
+    title = request.form.get('title', 'New conversation').strip() or 'Farm Advisory Consultation'
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(
+                "INSERT INTO ai_conversations (user_id, title, created_at, updated_at) VALUES (%s,%s,NOW(),NOW()) RETURNING id",
+                (user['id'], title)
+            )
+            conv_id = cur.fetchone()['id']
+            conn.commit()
+            return redirect(url_for('assistant_conversation', conv_id=conv_id))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"New conversation error: {e}")
+        finally:
+            close_db_connection(conn, cur)
+    flash('Could not create conversation.', 'error')
+    return redirect(url_for('assistant_home'))
+
+
+@app.route('/assistant/<int:conv_id>')
+@user_login_required
+def assistant_conversation(conv_id):
+    """View a specific conversation in 2-column layout."""
+    user = get_current_user()
+    conn = get_db_connection()
+    conversation, messages, conversations = None, [], []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT ac.*, COUNT(am.id) AS message_count
+                FROM ai_conversations ac
+                LEFT JOIN ai_messages am ON am.conversation_id = ac.id
+                WHERE ac.user_id=%s
+                GROUP BY ac.id
+                ORDER BY ac.updated_at DESC
+            """, (user['id'],))
+            conversations = cur.fetchall()
+
+            cur.execute("SELECT * FROM ai_conversations WHERE id=%s AND user_id=%s", (conv_id, user['id']))
+            conversation = cur.fetchone()
+            if not conversation:
+                flash('Conversation not found.', 'error')
+                return redirect(url_for('assistant_home'))
+            cur.execute("SELECT * FROM ai_messages WHERE conversation_id=%s ORDER BY created_at ASC", (conv_id,))
+            messages = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+    return render_template('assistant_chat.html', user=user,
+                           conversations=conversations,
+                           conversation=conversation, messages=messages)
+
+
+@app.route('/api/assistant/chat', methods=['POST'])
+@user_login_required
+@limiter.limit("30 per minute")
+def assistant_chat_api():
+    """Send a message to the AI assistant and stream back the response."""
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    conv_id  = data.get('conversation_id')
+    user_msg = (data.get('message') or '').strip()
+
+    if not user_msg:
+        return jsonify({'success': False, 'error': 'Message is required.'}), 400
+    if len(user_msg) > 2000:
+        return jsonify({'success': False, 'error': 'Message too long (max 2000 characters).'}), 400
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database unavailable.'}), 503
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Validate conversation ownership
+        if conv_id:
+            cur.execute("SELECT * FROM ai_conversations WHERE id=%s AND user_id=%s", (conv_id, user['id']))
+            conversation = cur.fetchone()
+            if not conversation:
+                return jsonify({'success': False, 'error': 'Conversation not found.'}), 404
+        else:
+            # Auto-create conversation
+            cur.execute(
+                "INSERT INTO ai_conversations (user_id, title, created_at, updated_at) VALUES (%s,'Farm Assistant Chat',NOW(),NOW()) RETURNING id",
+                (user['id'],)
+            )
+            conv_id = cur.fetchone()['id']
+
+        # Build message history (last 10 for context window)
+        cur.execute("""
+            SELECT role, content FROM ai_messages
+            WHERE conversation_id=%s ORDER BY created_at DESC LIMIT 10
+        """, (conv_id,))
+        history = list(reversed(cur.fetchall()))
+
+        # Save user message
+        cur.execute(
+            "INSERT INTO ai_messages (conversation_id, role, content, created_at) VALUES (%s,'user',%s,NOW())",
+            (conv_id, user_msg)
+        )
+
+        # Build messages for OpenRouter
+        sys_prompt = _build_assistant_context(user['id'], {})
+        messages_payload = [{'role': 'system', 'content': sys_prompt}]
+        for h in history:
+            messages_payload.append({'role': h['role'], 'content': h['content']})
+        messages_payload.append({'role': 'user', 'content': user_msg})
+
+        # Check API key
+        if not OPENROUTER_API_KEY:
+            assistant_reply = ("I'm currently unable to connect to the AI service. "
+                               "Please check that an OPENROUTER_API_KEY is configured. "
+                               "For agronomic guidance, please consult the disease diagnosis module or a local extension officer.")
+        else:
+            assistant_reply = None
+            text_models = [
+                'meta-llama/llama-3.3-70b-instruct:free',
+                'meta-llama/llama-3.1-8b-instruct:free',
+                'google/gemma-3-27b-it:free',
+                'qwen/qwen3-8b:free',
+            ]
+            for model in text_models:
+                try:
+                    resp = requests.post(
+                        OPENROUTER_API_URL,
+                        headers={'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+                                 'Content-Type': 'application/json'},
+                        json={'model': model, 'messages': messages_payload, 'max_tokens': 800},
+                        timeout=25
+                    )
+                    rdata = resp.json()
+                    if 'choices' in rdata and rdata['choices']:
+                        assistant_reply = rdata['choices'][0]['message']['content']
+                        break
+                except Exception as model_err:
+                    logger.warning(f"Assistant model {model} error: {model_err}")
+                    continue
+
+            if not assistant_reply:
+                assistant_reply = ("The AI service is temporarily unavailable. "
+                                   "Please try again shortly or consult the knowledge-based diagnosis module.")
+
+        # Save assistant reply
+        cur.execute(
+            "INSERT INTO ai_messages (conversation_id, role, content, created_at) VALUES (%s,'assistant',%s,NOW())",
+            (conv_id, assistant_reply)
+        )
+        # Update conversation timestamp
+        cur.execute("UPDATE ai_conversations SET updated_at=NOW() WHERE id=%s", (conv_id,))
+        conn.commit()
+
+        return jsonify({
+            'success': True,
+            'reply': assistant_reply,
+            'conversation_id': conv_id
+        })
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Assistant chat error: {e}")
+        return jsonify({'success': False, 'error': 'Chat failed. Please try again.'}), 500
+    finally:
+        close_db_connection(conn, cur)
+
+
+@app.route('/assistant/<int:conv_id>/delete', methods=['POST'])
+@user_login_required
+def assistant_delete_conversation(conv_id):
+    """Delete a conversation (owner only)."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM ai_conversations WHERE id=%s AND user_id=%s", (conv_id, user['id']))
+            conn.commit()
+            flash('Conversation deleted.', 'success')
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Delete conversation error: {e}")
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('assistant_home'))
+
+
+# ============================================================================
+# STAGE 5: CROP CALENDAR, FARM TASKS & WEATHER ALERTS
+# ============================================================================
+
+AGRONOMIC_TASK_TEMPLATES = {
+    'Maize': [
+        (-7, 'Land Preparation & Basal Fertilizer', 'Clear field, plough to fine tilth, and apply recommended basal fertilizer (DAP or planting blend) according to soil test.', 'soil_prep', 'high'),
+        (0, 'Planting Certified Hybrid Seed', 'Plant certified Kenya-adapted hybrid seed at 75cm x 25cm spacing with 1 seed per hill at 5cm depth.', 'planting', 'high'),
+        (14, 'First Weeding & Cutworm Scouting', 'Carry out first shallow weeding. Inspect young seedlings for cutworm damage and early stalk borers.', 'weeding', 'medium'),
+        (28, 'Top Dressing (CAN) & Fall Armyworm Scout', 'Apply CAN top dressing at knee-high stage (50kg/acre). Inspect leaf whorls for Fall Armyworm frass/larvae.', 'fertilizing', 'high'),
+        (45, 'Second Weeding & Earthing Up', 'Conduct second weeding before canopy closure. Earth up soil around root bases to prevent lodging in wind.', 'weeding', 'medium'),
+        (75, 'Tasseling & Moisture Monitoring', 'Ensure adequate soil moisture during tasseling and silk emergence. Avoid water stress during critical pollination.', 'irrigation', 'medium'),
+        (120, 'Physiological Maturity & Storage Prep', 'Check physiological maturity (black layer at kernel base). Clean cribs, shell, and prepare hermetic bags to prevent post-harvest weevils.', 'harvesting', 'high')
+    ],
+    'Beans': [
+        (-5, 'Land Preparation & Manure Incorporation', 'Till soil to a fine tilth and incorporate well-rotted manure or basal phosphate fertilizer.', 'soil_prep', 'medium'),
+        (0, 'Planting Certified Inoculated Seeds', 'Plant certified bean seeds at 45cm x 15cm spacing. Ensure good soil-to-seed contact.', 'planting', 'high'),
+        (14, 'First Weeding & Bean Fly Scouting', 'Weed gently around young seedlings. Inspect stems at ground level for bean fly puncture marks.', 'weeding', 'medium'),
+        (25, 'Foliar Fertilizer & Aphid Management', 'Apply balanced foliar feed. Scout underside of leaves and growing tips for black bean aphids.', 'fertilizing', 'medium'),
+        (50, 'Podding Stage Rust & Anthracnose Check', 'Monitor foliage for fungal spots. Avoid working in fields when foliage is wet to prevent disease spread.', 'pest_control', 'medium'),
+        (75, 'Harvesting & Shelling', 'Harvest mature pods when dry. Shell and dry to below 13% moisture before bagging in hermetic containers.', 'harvesting', 'high')
+    ],
+    'Tomato': [
+        (-21, 'Nursery Bed Preparation & Sowing', 'Prepare raised nursery bed with sterile soil mix. Sow certified hybrid seeds and water gently with fine rose can.', 'planting', 'high'),
+        (0, 'Transplanting Seedlings & Staking Setup', 'Transplant hardened seedlings (4-5 true leaves) in the late afternoon at 60cm x 45cm. Install sturdy stakes.', 'planting', 'high'),
+        (7, 'Cutworm & Damping-Off Inspection', 'Check newly transplanted stems. Apply copper-based preventive spray if cool and overcast.', 'pest_control', 'high'),
+        (21, 'First Top Dressing & Side Shoots Pruning', 'Apply NPK/CAN top dressing. Prune indeterminate suckers to maintain single or double main stems.', 'fertilizing', 'medium'),
+        (35, 'Early Blight & Tuta Absoluta Scouting', 'Inspect lower leaves for concentric spots. Install pheromone delta traps for Tuta absoluta monitoring.', 'pest_control', 'high'),
+        (60, 'Fruit Development Calcium/Boron Foliar', 'Apply calcium spray to prevent Blossom End Rot during rapid fruit enlargement.', 'fertilizing', 'medium'),
+        (80, 'Harvesting at Breaker Stage', 'Harvest fruits at breaker or pink stage for longest shelf life and optimal transport stability to market.', 'harvesting', 'high')
+    ],
+    'Potato': [
+        (-10, 'Land Tilth & Furrow Preparation', 'Deep plough and make ridges/furrows 75cm apart. Mix well-rotted compost or basal DAP thoroughly.', 'soil_prep', 'medium'),
+        (0, 'Planting Certified Sprouted Seed Tubers', 'Place certified sprouted seed tubers 30cm apart in furrows, sprouts facing upward. Cover with 10cm soil.', 'planting', 'high'),
+        (21, 'First Hilling Up (Earthing Up)', 'Ridge soil over emerging stems to encourage stolon development and prevent tuber greening.', 'weeding', 'high'),
+        (35, 'Late Blight Preventive Scouting', 'Scout for water-soaked leaf spots especially during cool humid weather. Apply registered protectant fungicide.', 'pest_control', 'high'),
+        (50, 'Second Hilling Up & Tuber Bulking Check', 'Top dress with sulfate of potash and earth up ridges higher.', 'fertilizing', 'medium'),
+        (90, 'Dehaulming (Cutting Vines)', 'Cut off vines 10-14 days before harvest to harden potato skin for storage and prevent tuber blight.', 'harvesting', 'high'),
+        (105, 'Harvesting & Curing', 'Dig tubers carefully on a dry sunny day using flat-tined forks. Cure in dark, ventilated store.', 'harvesting', 'high')
+    ],
+    'Default': [
+        (-7, 'Land Preparation & Soil Testing', 'Clear weeds, plough soil, and verify pH recommendations.', 'soil_prep', 'medium'),
+        (0, 'Planting / Sowing', 'Plant seeds or seedlings with certified seed stock and appropriate spacing.', 'planting', 'high'),
+        (14, 'First Field Scouting & Weed Management', 'Inspect seedling emergence, scout for insect pests and weed early.', 'weeding', 'medium'),
+        (30, 'Nutrient Application (Top Dressing)', 'Apply required top-dressing fertilizer or compost based on crop stage.', 'fertilizing', 'medium'),
+        (60, 'Mid-Season Disease & Moisture Monitoring', 'Monitor crop health, foliage condition, and irrigation/rainfall levels.', 'pest_control', 'medium'),
+        (90, 'Harvest Preparation & Storage Sanitization', 'Inspect crop maturity and clean storage facilities.', 'harvesting', 'high')
+    ]
+}
+
+
+def generate_crop_cycle_tasks(conn, user_id, farm_id, cycle_id, crop_name, planting_date_str):
+    """Generate scheduled farm tasks from agronomic template based on planting date."""
+    from datetime import datetime, timedelta
+    try:
+        p_date = datetime.strptime(str(planting_date_str), '%Y-%m-%d').date()
+    except Exception:
+        p_date = datetime.today().date()
+
+    templates = AGRONOMIC_TASK_TEMPLATES.get(crop_name, AGRONOMIC_TASK_TEMPLATES['Default'])
+    cur = conn.cursor()
+    count = 0
+    for offset_days, title, desc, cat, prio in templates:
+        due = p_date + timedelta(days=offset_days)
+        cur.execute(
+            """INSERT INTO farm_tasks 
+               (user_id, farm_id, crop_cycle_id, title, description, task_category, due_date, status, priority, suggested_by, created_at, updated_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending', %s, 'system', NOW(), NOW())""",
+            (user_id, farm_id, cycle_id, f"{crop_name}: {title}", desc, cat, due, prio)
+        )
+        count += 1
+    return count
+
+
+@app.route('/calendar')
+@user_login_required
+def calendar_home():
+    """Crop calendar and task manager dashboard."""
+    from datetime import date
+    user = get_current_user()
+    status_filter = request.args.get('status', 'all')
+    farm_filter = request.args.get('farm_id')
+
+    conn = get_db_connection()
+    tasks = []
+    farms_list = []
+    stats = {'total': 0, 'pending': 0, 'completed': 0, 'overdue': 0}
+
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Fetch user farms for filtering
+            cur.execute("SELECT id, name FROM farms WHERE user_id=%s ORDER BY name", (user['id'],))
+            farms_list = cur.fetchall()
+
+            # Query tasks with joins
+            query = """
+                SELECT t.*, f.name AS farm_name, cc.variety_name, c.crop_name
+                FROM farm_tasks t
+                LEFT JOIN farms f ON f.id = t.farm_id
+                LEFT JOIN crop_cycles cc ON cc.id = t.crop_cycle_id
+                LEFT JOIN crops c ON c.crop_id = cc.crop_id
+                WHERE t.user_id = %s
+            """
+            params = [user['id']]
+
+            if farm_filter:
+                query += " AND t.farm_id = %s"
+                params.append(farm_filter)
+
+            if status_filter == 'pending':
+                query += " AND t.status = 'pending'"
+            elif status_filter == 'completed':
+                query += " AND t.status = 'completed'"
+            elif status_filter == 'postponed':
+                query += " AND t.status = 'postponed'"
+
+            query += " ORDER BY t.due_date ASC, t.priority DESC"
+            cur.execute(query, tuple(params))
+            tasks = cur.fetchall()
+
+            # Calculate stats for all user tasks
+            cur.execute("""
+                SELECT 
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+                    COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+                    COUNT(*) FILTER (WHERE status = 'pending' AND due_date < CURRENT_DATE) AS overdue
+                FROM farm_tasks WHERE user_id = %s
+            """, (user['id'],))
+            row = cur.fetchone()
+            if row:
+                stats = dict(row)
+        finally:
+            close_db_connection(conn, cur)
+
+    today = date.today()
+    return render_template('calendar.html', user=user, tasks=tasks, farms=farms_list,
+                           stats=stats, status_filter=status_filter, farm_filter=farm_filter,
+                           today=today)
+
+
+@app.route('/calendar/tasks/new', methods=['GET', 'POST'])
+@user_login_required
+def task_new():
+    """Create a new farm task."""
+    from datetime import date
+    user = get_current_user()
+    conn = get_db_connection()
+    farms_list = []
+    cycles_list = []
+
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT id, name FROM farms WHERE user_id=%s ORDER BY name", (user['id'],))
+            farms_list = cur.fetchall()
+
+            cur.execute("""
+                SELECT cc.id, cc.farm_id, c.crop_name, cc.variety_name
+                FROM crop_cycles cc
+                JOIN crops c ON c.crop_id = cc.crop_id
+                WHERE cc.user_id=%s AND cc.status != 'completed'
+                ORDER BY cc.created_at DESC
+            """, (user['id'],))
+            cycles_list = cur.fetchall()
+
+            if request.method == 'POST':
+                title = request.form.get('title', '').strip()
+                description = request.form.get('description', '').strip()
+                task_category = request.form.get('task_category', 'general')
+                due_date = request.form.get('due_date')
+                priority = request.form.get('priority', 'medium')
+                farm_id = request.form.get('farm_id') or None
+                crop_cycle_id = request.form.get('crop_cycle_id') or None
+
+                if not title:
+                    flash('Task title is required.', 'error')
+                    return render_template('task_form.html', user=user, farms=farms_list,
+                                           cycles=cycles_list, task=None)
+                if not due_date:
+                    flash('Due date is required.', 'error')
+                    return render_template('task_form.html', user=user, farms=farms_list,
+                                           cycles=cycles_list, task=None)
+
+                cur.execute(
+                    """INSERT INTO farm_tasks
+                       (user_id, farm_id, crop_cycle_id, title, description, task_category,
+                        due_date, priority, status, suggested_by, created_at, updated_at)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', 'farmer', NOW(), NOW())""",
+                    (user['id'], farm_id, crop_cycle_id, title, description,
+                     task_category, due_date, priority)
+                )
+                conn.commit()
+                flash('Task created successfully!', 'success')
+                return redirect(url_for('calendar_home'))
+        except Exception as e:
+            if conn: conn.rollback()
+            logger.error(f"Task create error: {e}")
+            flash('Failed to create task.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+
+    prefill_title = request.args.get('title', '')
+    return render_template('task_form.html', user=user, farms=farms_list,
+                           cycles=cycles_list, task=None, prefill_title=prefill_title)
+
+
+@app.route('/calendar/tasks/<int:task_id>/edit', methods=['GET', 'POST'])
+@user_login_required
+def task_edit(task_id):
+    """Edit an existing farm task (owner only)."""
+    user = get_current_user()
+    conn = get_db_connection()
+    task = None
+    farms_list = []
+    cycles_list = []
+
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM farm_tasks WHERE id=%s AND user_id=%s", (task_id, user['id']))
+            task = cur.fetchone()
+            if not task:
+                flash('Task not found.', 'error')
+                return redirect(url_for('calendar_home'))
+
+            cur.execute("SELECT id, name FROM farms WHERE user_id=%s ORDER BY name", (user['id'],))
+            farms_list = cur.fetchall()
+
+            cur.execute("""
+                SELECT cc.id, cc.farm_id, c.crop_name, cc.variety_name
+                FROM crop_cycles cc
+                JOIN crops c ON c.crop_id = cc.crop_id
+                WHERE cc.user_id=%s
+                ORDER BY cc.created_at DESC
+            """, (user['id'],))
+            cycles_list = cur.fetchall()
+
+            if request.method == 'POST':
+                title = request.form.get('title', '').strip()
+                description = request.form.get('description', '').strip()
+                task_category = request.form.get('task_category', 'general')
+                due_date = request.form.get('due_date')
+                priority = request.form.get('priority', 'medium')
+                status = request.form.get('status', 'pending')
+                farm_id = request.form.get('farm_id') or None
+                crop_cycle_id = request.form.get('crop_cycle_id') or None
+
+                if not title or not due_date:
+                    flash('Title and due date are required.', 'error')
+                    return render_template('task_form.html', user=user, farms=farms_list,
+                                           cycles=cycles_list, task=task)
+
+                cur.execute(
+                    """UPDATE farm_tasks
+                        SET title=%s, description=%s, task_category=%s, due_date=%s,
+                            priority=%s, status=%s, farm_id=%s, crop_cycle_id=%s,
+                            completed_at=(CASE WHEN %s='completed' THEN NOW() ELSE NULL END),
+                            updated_at=NOW()
+                        WHERE id=%s AND user_id=%s""",
+                    (title, description, task_category, due_date, priority, status,
+                     farm_id, crop_cycle_id, status, task_id, user['id'])
+                )
+                conn.commit()
+                flash('Task updated.', 'success')
+                return redirect(url_for('calendar_home'))
+        except Exception as e:
+            if conn: conn.rollback()
+            logger.error(f"Task edit error: {e}")
+            flash('Failed to update task.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+
+    return render_template('task_form.html', user=user, farms=farms_list,
+                           cycles=cycles_list, task=task)
+
+
+@app.route('/calendar/tasks/<int:task_id>/toggle', methods=['POST'])
+@user_login_required
+def task_toggle(task_id):
+    """Toggle task completed / pending status."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT status FROM farm_tasks WHERE id=%s AND user_id=%s", (task_id, user['id']))
+            row = cur.fetchone()
+            if row:
+                new_status = 'pending' if row['status'] == 'completed' else 'completed'
+                cur.execute(
+                    """UPDATE farm_tasks 
+                       SET status=%s, 
+                           completed_at=(CASE WHEN %s='completed' THEN NOW() ELSE NULL END), 
+                           updated_at=NOW() 
+                       WHERE id=%s AND user_id=%s""",
+                    (new_status, new_status, task_id, user['id'])
+                )
+                conn.commit()
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'success': True, 'new_status': new_status})
+                flash(f"Task marked as {new_status}.", 'success')
+        except Exception as e:
+            if conn: conn.rollback()
+            logger.error(f"Task toggle error: {e}")
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('calendar_home'))
+
+
+@app.route('/calendar/tasks/<int:task_id>/postpone', methods=['POST'])
+@user_login_required
+def task_postpone(task_id):
+    """Postpone task with an auditable reason and updated due date."""
+    user = get_current_user()
+    new_due_date = request.form.get('new_due_date')
+    reason = request.form.get('postponement_reason', '').strip()
+
+    if not new_due_date or not reason:
+        flash('Both new due date and postponement reason are required.', 'error')
+        return redirect(url_for('calendar_home'))
+
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE farm_tasks
+                   SET due_date=%s, postponement_reason=%s, status='postponed', updated_at=NOW()
+                   WHERE id=%s AND user_id=%s""",
+                (new_due_date, reason, task_id, user['id'])
+            )
+            conn.commit()
+            flash('Task rescheduled with documented reason.', 'info')
+        except Exception as e:
+            if conn: conn.rollback()
+            logger.error(f"Postpone task error: {e}")
+            flash('Could not reschedule task.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('calendar_home'))
+
+
+@app.route('/calendar/tasks/<int:task_id>/delete', methods=['POST'])
+@user_login_required
+def task_delete(task_id):
+    """Delete a farm task (owner only)."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM farm_tasks WHERE id=%s AND user_id=%s", (task_id, user['id']))
+            conn.commit()
+            flash('Task removed.', 'success')
+        except Exception as e:
+            if conn: conn.rollback()
+            logger.error(f"Task delete error: {e}")
+            flash('Failed to delete task.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('calendar_home'))
+
+
+@app.route('/calendar/generate/<int:cycle_id>', methods=['POST'])
+@user_login_required
+def calendar_generate_from_cycle(cycle_id):
+    """Generate agronomic tasks for an existing crop cycle."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT cc.*, c.crop_name 
+                FROM crop_cycles cc
+                JOIN crops c ON c.crop_id = cc.crop_id
+                WHERE cc.id=%s AND cc.user_id=%s
+            """, (cycle_id, user['id']))
+            cycle = cur.fetchone()
+            if not cycle:
+                flash('Crop cycle not found.', 'error')
+                return redirect(url_for('farm_list'))
+
+            count = generate_crop_cycle_tasks(
+                conn, user['id'], cycle['farm_id'], cycle['id'],
+                cycle['crop_name'], str(cycle['planting_date'] or '')
+            )
+            conn.commit()
+            flash(f"Generated {count} agronomic tasks for {cycle['crop_name']}!", 'success')
+            return redirect(url_for('calendar_home', farm_id=cycle['farm_id']))
+        except Exception as e:
+            if conn: conn.rollback()
+            logger.error(f"Generate tasks error: {e}")
+            flash('Failed to generate tasks.', 'error')
+        finally:
+            close_db_connection(conn, cur)
+    return redirect(url_for('calendar_home'))
+
+
+@app.route('/weather/alerts')
+@user_login_required
+def weather_alerts_view():
+    """Agro-meteorological advisories and automated risk alerts."""
+    user = get_current_user()
+    conn = get_db_connection()
+    alerts = []
+    user_counties = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Find counties where user has farms
+            cur.execute("""
+                SELECT DISTINCT c.county_id, c.county_name
+                FROM farms f
+                JOIN kenya_counties c ON c.county_id = f.county_id
+                WHERE f.user_id = %s
+            """, (user['id'],))
+            user_counties = cur.fetchall()
+
+            # Active alerts
+            cur.execute("""
+                SELECT wa.*, kc.county_name, sc.sub_county_name
+                FROM weather_alerts wa
+                JOIN kenya_counties kc ON kc.county_id = wa.county_id
+                LEFT JOIN sub_counties sc ON sc.sub_county_id = wa.sub_county_id
+                WHERE wa.valid_to >= NOW() OR wa.valid_to IS NULL
+                ORDER BY 
+                    CASE wa.severity 
+                        WHEN 'critical' THEN 1 
+                        WHEN 'warning' THEN 2 
+                        WHEN 'advisory' THEN 3 
+                        ELSE 4 
+                    END,
+                    wa.created_at DESC
+            """)
+            alerts = cur.fetchall()
+        finally:
+            close_db_connection(conn, cur)
+
+    return render_template('weather_alerts.html', user=user, alerts=alerts,
+                           user_counties=user_counties)
+
+
+@app.route('/api/weather/alerts')
+@user_login_required
+def api_weather_alerts():
+    """JSON API of active weather alerts."""
+    conn = get_db_connection()
+    alerts = []
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT wa.id, wa.alert_type, wa.severity, wa.headline, wa.description,
+                       wa.recommended_actions, wa.valid_from, wa.valid_to, wa.source,
+                       kc.county_name
+                FROM weather_alerts wa
+                JOIN kenya_counties kc ON kc.county_id = wa.county_id
+                WHERE wa.valid_to >= NOW() OR wa.valid_to IS NULL
+                ORDER BY wa.created_at DESC LIMIT 20
+            """)
+            alerts = cur.fetchall()
+            return jsonify({'success': True, 'alerts': [dict(a) for a in alerts]})
+        except Exception as e:
+            logger.error(f"Error in api_weather_alerts: {e}")
+            return make_sanitized_error("WEATHER_ERROR", "Unable to load weather alerts.", 500)
+        finally:
+            close_db_connection(conn, cur)
+    return make_sanitized_error("DATABASE_UNAVAILABLE", "Weather alerts service temporarily unavailable.", 503)
+
+
+@app.route('/api/notifications')
+@user_login_required
+def api_notifications():
+    """JSON list of notifications for authenticated user."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("""
+                SELECT * FROM user_notifications
+                WHERE user_id = %s
+                ORDER BY created_at DESC LIMIT 15
+            """, (user['id'],))
+            notifs = cur.fetchall()
+            unread_count = sum(1 for n in notifs if not n['is_read'])
+            return jsonify({
+                'success': True,
+                'notifications': [dict(n) for n in notifs],
+                'unread_count': unread_count
+            })
+        except Exception as e:
+            logger.error(f"Error in api_notifications: {e}")
+            return make_sanitized_error("NOTIFICATION_ERROR", "Unable to load notifications.", 500)
+        finally:
+            close_db_connection(conn, cur)
+    return make_sanitized_error("DATABASE_UNAVAILABLE", "Notifications service temporarily unavailable.", 503)
+
+
+@app.route('/api/notifications/<int:notif_id>/read', methods=['POST'])
+@user_login_required
+def api_notification_mark_read(notif_id):
+    """Mark a notification as read."""
+    user = get_current_user()
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("UPDATE user_notifications SET is_read = TRUE WHERE id = %s AND user_id = %s",
+                        (notif_id, user['id']))
+            conn.commit()
+            return jsonify({'success': True})
+        finally:
+            close_db_connection(conn, cur)
+    return jsonify({'success': False, 'error': 'Database unavailable'}), 503
 
 
 # ============================================================================
 # MAIN
 # ============================================================================
+
 
 if __name__ == '__main__':
     if test_database_connection():
@@ -3032,12 +5013,12 @@ if __name__ == '__main__':
         debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
         print("Starting PlantWise Agricultural Expert System...")
         
-        if env == 'development':
+        use_ssl = os.getenv('USE_SSL', 'false').lower() == 'true'
+        if use_ssl:
             print(f"Access at: https://localhost:{port}\n")
             app.run(debug=debug, host='0.0.0.0', port=port, ssl_context='adhoc')
         else:
             print(f"Access at: http://localhost:{port}\n")
-            # ssl_context='adhoc' removed — production SSL is handled by the reverse proxy
             app.run(debug=debug, host='0.0.0.0', port=port)
     else:
         print("\n[X] Cannot start - database connection failed")

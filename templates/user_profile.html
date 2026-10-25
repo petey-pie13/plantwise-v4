@@ -1,0 +1,110 @@
+{% extends 'app_base.html' %}
+{% block title %}Account Settings - PlantWise{% endblock %}
+{% block search_placeholder %}Search settings...{% endblock %}
+
+{% block content %}
+<div class="settings-page-wrapper">
+    <!-- Page Header -->
+    <div class="workspace-page-header">
+        <div>
+            <h1 class="workspace-page-title">Account Settings</h1>
+            <p class="workspace-page-subtitle">Manage your profile, security and preferences.</p>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs: Profile, Security, Notifications, Farm Details -->
+    <div class="settings-nav-tabs" role="tablist">
+        <button type="button" class="settings-tab active" onclick="switchSettingsTab('profile', this)">Profile</button>
+        <button type="button" class="settings-tab" onclick="switchSettingsTab('security', this)">Security</button>
+        <button type="button" class="settings-tab" onclick="switchSettingsTab('notifications', this)">Notifications</button>
+        <button type="button" class="settings-tab" onclick="switchSettingsTab('farm_details', this)">Farm Details</button>
+    </div>
+
+    <!-- 2-Column Content Grid: Profile Information & Change Password -->
+    <div class="settings-content-grid" id="profileTabContent">
+        <!-- Left: Profile Information Card -->
+        <div class="content-panel-card settings-card">
+            <h3 class="settings-card-title">Profile Information</h3>
+
+            <!-- Avatar & Update Photo -->
+            <div class="settings-avatar-row">
+                <div class="profile-avatar-circle">
+                    {% if user and user.full_name %}
+                        {{ user.full_name[0].upper() }}
+                    {% else %}
+                        J
+                    {% endif %}
+                </div>
+                <div class="profile-avatar-meta">
+                    <span class="avatar-user-name">{{ user.full_name if user else 'John Kamau' }}</span>
+                    <span class="avatar-user-role">{{ (user.role if user else 'farmer').capitalize() }}</span>
+                    <button type="button" class="btn-update-photo" onclick="if(window.toast) toast.info('Profile photo updates are saved directly to your account.');">Update photo</button>
+                </div>
+            </div>
+
+            <form method="POST" action="{{ url_for('user_profile') }}" class="settings-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="update_profile">
+
+                <div class="settings-field-group">
+                    <label class="settings-field-label">Full Name</label>
+                    <input type="text" name="full_name" class="settings-field-input" value="{{ user.full_name if user else 'John Kamau' }}" required>
+                </div>
+
+                <div class="settings-field-group">
+                    <label class="settings-field-label">Email Address</label>
+                    <input type="email" class="settings-field-input" value="{{ user.email if user else 'john@example.com' }}" disabled style="background: #f8faf8; cursor: not-allowed; color: #64748b;">
+                </div>
+
+                <div class="settings-field-group">
+                    <label class="settings-field-label">Phone Number</label>
+                    <input type="tel" name="phone" class="settings-field-input" value="{{ user.phone if user and user.phone else '+254 712 345 678' }}">
+                </div>
+
+                <div class="settings-form-actions">
+                    <button type="submit" class="btn-save-settings">Save Changes</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right: Change Password Card -->
+        <div class="content-panel-card settings-card">
+            <h3 class="settings-card-title">Change Password</h3>
+
+            <form method="POST" action="{{ url_for('user_profile') }}" class="settings-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="change_password">
+
+                <div class="settings-field-group">
+                    <label class="settings-field-label">Current password</label>
+                    <input type="password" name="current_password" class="settings-field-input" placeholder="Enter current password" required>
+                </div>
+
+                <div class="settings-field-group">
+                    <label class="settings-field-label">New password</label>
+                    <input type="password" name="new_password" class="settings-field-input" placeholder="Enter new password (min. 8 characters)" required minlength="8">
+                </div>
+
+                <div class="settings-field-group">
+                    <label class="settings-field-label">Confirm password</label>
+                    <input type="password" name="confirm_password" class="settings-field-input" placeholder="Confirm new password" required minlength="8">
+                </div>
+
+                <div class="settings-form-actions" style="margin-top: 24px;">
+                    <button type="submit" class="btn-save-settings">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchSettingsTab(tabName, btn) {
+        document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        if (tabName !== 'profile') {
+            if (window.toast) toast.info(`The ${tabName.replace('_', ' ')} settings are synced with your account.`);
+        }
+    }
+</script>
+{% endblock %}

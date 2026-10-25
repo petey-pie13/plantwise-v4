@@ -1,0 +1,121 @@
+{% extends 'app_base.html' %}
+{% block title %}Weather & Climate - PlantWise{% endblock %}
+{% block search_placeholder %}Search location...{% endblock %}
+
+{% block content %}
+<div class="weather-page-wrapper">
+    <!-- Location Pin Bar & Header -->
+    <div class="workspace-page-header">
+        <div>
+            <div class="location-pin-chip">
+                <i data-lucide="map-pin"></i>
+                <span>Nairobi County</span>
+            </div>
+            <h1 class="workspace-page-title" style="margin-top: 8px;">Weather & Climate</h1>
+            <p class="workspace-page-subtitle">Real-time weather data and 7-day forecast for your location.</p>
+        </div>
+    </div>
+
+    <!-- Main Weather Hero Card (Split: Current Weather + 7-Day Forecast) -->
+    <div class="content-panel-card weather-overview-card">
+        <div class="weather-overview-split">
+            <!-- Left: Current Conditions -->
+            <div class="current-conditions-side">
+                <div class="conditions-location-tag">
+                    <i data-lucide="map-pin" style="width: 14px; height: 14px;"></i>
+                    <span>Nairobi County</span>
+                </div>
+
+                <div class="current-temp-hero">
+                    <div class="temp-big-num">22&deg;C</div>
+                    <div class="temp-condition-label">Partly Cloudy</div>
+                </div>
+
+                <div class="weather-metrics-row">
+                    <div class="metric-sub-item">
+                        <span class="sub-label">Humidity</span>
+                        <span class="sub-val">68%</span>
+                    </div>
+                    <div class="metric-sub-item">
+                        <span class="sub-label">Wind</span>
+                        <span class="sub-val">12 km/h</span>
+                    </div>
+                    <div class="metric-sub-item">
+                        <span class="sub-label">Chance</span>
+                        <span class="sub-val">20%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: 7-Day Forecast Table -->
+            <div class="sevenday-forecast-side">
+                <h3 class="sevenday-heading">7-Day Forecast</h3>
+                <div class="sevenday-rows-list">
+                    <div class="sevenday-row">
+                        <span class="forecast-day">Mon</span>
+                        <div class="forecast-icon"><i data-lucide="cloud-sun"></i></div>
+                        <span class="forecast-high">21&deg;</span>
+                        <span class="forecast-low">13&deg;</span>
+                    </div>
+                    <div class="sevenday-row">
+                        <span class="forecast-day">Tue</span>
+                        <div class="forecast-icon"><i data-lucide="sun"></i></div>
+                        <span class="forecast-high">22&deg;</span>
+                        <span class="forecast-low">14&deg;</span>
+                    </div>
+                    <div class="sevenday-row">
+                        <span class="forecast-day">Wed</span>
+                        <div class="forecast-icon"><i data-lucide="sun"></i></div>
+                        <span class="forecast-high">23&deg;</span>
+                        <span class="forecast-low">14&deg;</span>
+                    </div>
+                    <div class="sevenday-row">
+                        <span class="forecast-day">Thu</span>
+                        <div class="forecast-icon"><i data-lucide="cloud-rain"></i></div>
+                        <span class="forecast-high">22&deg;</span>
+                        <span class="forecast-low">13&deg;</span>
+                    </div>
+                    <div class="sevenday-row">
+                        <span class="forecast-day">Fri</span>
+                        <div class="forecast-icon"><i data-lucide="cloud-sun"></i></div>
+                        <span class="forecast-high">21&deg;</span>
+                        <span class="forecast-low">12&deg;</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Climate Risk Alert Card -->
+    <div class="climate-risk-alert-card">
+        <div class="alert-icon-wrap">
+            <i data-lucide="alert-triangle"></i>
+        </div>
+        <div class="alert-text-body">
+            <h4 class="alert-card-heading">Climate Risk Alert</h4>
+            <p class="alert-card-message">Moderate chance of heavy rainfall on Thursday. Consider drainage preparation for your fields.</p>
+        </div>
+        <div class="alert-card-action">
+            <span class="alert-details-link" style="cursor: default;">Expected rainfall: 35-45mm</span>
+        </div>
+    </div>
+
+    <!-- Active Agro Advisories from Database if present -->
+    {% if alerts %}
+    <div style="margin-top: 32px;">
+        <h3 class="panel-title" style="margin-bottom: 16px;">Agro-Meteorological Advisories</h3>
+        {% for a in alerts %}
+        <div class="climate-risk-alert-card" style="margin-bottom: 12px; background: #ffffff; border-color: #e2e8e0;">
+            <div class="alert-icon-wrap" style="color: #0e7a46; background: #eaf5ee;">
+                <i data-lucide="info"></i>
+            </div>
+            <div class="alert-text-body">
+                <h4 class="alert-card-heading" style="color: #0f172a;">{{ a.headline or a.title }} ({{ a.county_name }})</h4>
+                <p class="alert-card-message" style="color: #475569;">{{ a.description or a.message or a.recommended_actions }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

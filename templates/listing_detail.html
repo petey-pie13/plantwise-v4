@@ -1,0 +1,79 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}{{ listing.crop_name }} - Marketplace - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>{{ listing.crop_name }}{% if listing.variety_name %} — {{ listing.variety_name }}{% endif %}</h1></div>
+    <a href="{{ url_for('marketplace') }}" class="btn btn-ghost btn-sm">← Back to Marketplace</a>
+</div>
+<div style="display:grid;grid-template-columns:1fr 340px;gap:1.5rem;align-items:start;">
+    <div>
+        <div class="data-card" style="margin-bottom:1rem;">
+            <div class="listing-card-image" style="height:300px;border-radius:.75rem .75rem 0 0;font-size:5rem;">
+                {% if images %}<img src="{{ url_for('static', filename='uploads/' + images[0].filename) }}" alt="{{ listing.crop_name }}" style="width:100%;height:100%;object-fit:cover;">{% else %}🌾{% endif %}
+            </div>
+            <div style="padding:1.5rem;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:.9rem;color:var(--text-medium);">
+                    <div><strong>Quantity:</strong> {{ listing.quantity_kg }} kg</div>
+                    <div><strong>Price:</strong> <span style="color:var(--primary-green);font-weight:700;font-size:1.1rem;">KES {{ "%.2f"|format(listing.price_per_kg) }}/kg</span></div>
+                    <div><strong>County:</strong> {{ listing.county_name or '—' }}</div>
+                    <div><strong>Sub-county:</strong> {{ listing.sub_county_name or '—' }}</div>
+                    {% if listing.grade %}<div><strong>Grade:</strong> {{ listing.grade }}</div>{% endif %}
+                    <div><strong>Fulfilment:</strong> {{ listing.fulfilment | capitalize }}</div>
+                    {% if listing.harvest_date %}<div><strong>Harvest Date:</strong> {{ listing.harvest_date }}</div>{% endif %}
+                    {% if listing.available_from %}<div><strong>Available From:</strong> {{ listing.available_from }}</div>{% endif %}
+                </div>
+                {% if listing.description %}
+                <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border-color);">
+                    <strong>Description:</strong><p style="margin:.5rem 0 0;line-height:1.6;color:var(--text-medium);">{{ listing.description }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <div class="data-card">
+            <div class="data-card-header"><h3>Seller Info</h3></div>
+            <div style="padding:1.5rem;">
+                <p style="font-weight:600;">{{ listing.seller_name }}</p>
+                {% if listing.seller_phone %}<p style="color:var(--text-medium);font-size:.9rem;">📞 {{ listing.seller_phone }}</p>{% endif %}
+            </div>
+        </div>
+
+        {% if user and user.id != listing.seller_id %}
+        <div class="data-card" style="margin-top:1rem;">
+            <div class="data-card-header"><h3>Place Order</h3></div>
+            <form method="POST" action="{{ url_for('order_place') }}" style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="listing_id" value="{{ listing.id }}">
+                <input type="hidden" name="idempotency_key" value="{{ range(1,999999)|random }}">
+                <div class="form-group">
+                    <label>Quantity (kg)</label>
+                    <input type="number" name="quantity_kg" step="0.1" min="0.1" max="{{ listing.quantity_kg }}" placeholder="e.g. 50" required>
+                    <span style="font-size:.75rem;color:var(--text-light);">Max: {{ listing.quantity_kg }} kg</span>
+                </div>
+                <div class="form-group">
+                    <label>Fulfilment</label>
+                    <select name="fulfilment">
+                        <option value="pickup">Pickup</option>
+                        {% if listing.fulfilment in ['delivery','both'] %}<option value="delivery">Delivery</option>{% endif %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Delivery Address (optional)</label>
+                    <input type="text" name="delivery_address" placeholder="Your location for delivery">
+                </div>
+                <button type="submit" class="btn btn-primary">Place Order</button>
+            </form>
+        </div>
+        {% elif not user %}
+        <div class="data-card" style="margin-top:1rem;">
+            <div style="padding:1.5rem;text-align:center;">
+                <p>Log in to place an order</p>
+                <a href="{{ url_for('user_login') }}" class="btn btn-primary">Sign In</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}Seller Orders - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Incoming Orders</h1><p>Manage orders from buyers</p></div></div>
+{% if orders %}
+<div class="data-card">
+    <table class="data-table">
+        <thead><tr><th>Crop</th><th>Qty (kg)</th><th>Total</th><th>Buyer</th><th>Phone</th><th>Status</th><th>Update</th></tr></thead>
+        <tbody>
+        {% for o in orders %}
+        <tr>
+            <td><strong>{{ o.crop_name }}</strong></td>
+            <td>{{ o.quantity_kg }}</td>
+            <td>KES {{ "%.2f"|format(o.total_amount) }}</td>
+            <td>{{ o.buyer_name }}</td>
+            <td>{{ o.buyer_phone or '—' }}</td>
+            <td><span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['pending','accepted'] %}badge-info{% elif o.status == 'dispatched' %}badge-purple{% elif o.status in ['rejected','cancelled'] %}badge-error{% else %}badge-warning{% endif %}">{{ o.status }}</span></td>
+            <td>
+                {% set next_statuses = {'pending':['accepted','rejected'],'accepted':['dispatched','cancelled'],'dispatched':['delivered'],'delivered':['completed']} %}
+                {% if o.status in next_statuses %}
+                <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:flex;gap:.3rem;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="status" style="font-size:.8rem;padding:4px 8px;border:1px solid var(--border-color);border-radius:.5rem;">
+                        {% for s in next_statuses[o.status] %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                </form>
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state"><div class="empty-state-icon">📋</div><h3>No orders yet</h3><p>When buyers place orders on your listings, they will appear here.</p></div>
+{% endif %}
+{% endblock %}

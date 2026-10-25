@@ -1,0 +1,97 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}{% if listing %}Edit Listing{% else %}New Listing{% endif %} - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>{% if listing %}Edit Listing{% else %}Create Produce Listing{% endif %}</h1></div>
+    <a href="{{ url_for('my_listings') }}" class="btn btn-ghost btn-sm">← My Listings</a>
+</div>
+<div class="form-card">
+    <form method="POST" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Crop *</label>
+                <select name="crop_id" id="crop_select" onchange="fillCropName(this)">
+                    <option value="">-- Select from KB --</option>
+                    {% for c in crops %}
+                    <option value="{{ c.crop_id }}" data-name="{{ c.crop_name }}" {% if listing and listing.crop_id == c.crop_id %}selected{% endif %}>{{ c.crop_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Crop Name *</label>
+                <input type="text" name="crop_name" id="crop_name" placeholder="Enter crop name" value="{{ listing.crop_name if listing else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label>Variety</label>
+                <input type="text" name="variety_name" value="{{ listing.variety_name if listing else '' }}" placeholder="e.g. H614D">
+            </div>
+            <div class="form-group">
+                <label>Grade</label>
+                <input type="text" name="grade" value="{{ listing.grade if listing else '' }}" placeholder="e.g. Grade 1, Premium">
+            </div>
+            <div class="form-group">
+                <label>Quantity (kg) *</label>
+                <input type="number" name="quantity_kg" step="0.01" min="0.01" value="{{ listing.quantity_kg if listing else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label>Price per kg (KES) *</label>
+                <input type="number" name="price_per_kg" step="0.01" min="0.01" value="{{ listing.price_per_kg if listing else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label>Fulfilment</label>
+                <select name="fulfilment">
+                    <option value="pickup" {% if listing and listing.fulfilment == 'pickup' %}selected{% endif %}>Pickup Only</option>
+                    <option value="delivery" {% if listing and listing.fulfilment == 'delivery' %}selected{% endif %}>Delivery Only</option>
+                    <option value="both" {% if listing and listing.fulfilment == 'both' %}selected{% endif %}>Pickup & Delivery</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>County</label>
+                <select name="county_id" id="county_id">
+                    <option value="">-- County --</option>
+                    {% for c in counties %}
+                    <option value="{{ c.county_id }}" {% if listing and listing.county_id == c.county_id %}selected{% endif %}>{{ c.county_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Harvest Date</label>
+                <input type="date" name="harvest_date" value="{{ listing.harvest_date if listing else '' }}">
+            </div>
+            <div class="form-group">
+                <label>Available From</label>
+                <input type="date" name="available_from" value="{{ listing.available_from if listing else '' }}">
+            </div>
+            {% if listing %}
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status">
+                    <option value="active" {% if listing.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="paused" {% if listing.status == 'paused' %}selected{% endif %}>Paused</option>
+                    <option value="sold" {% if listing.status == 'sold' %}selected{% endif %}>Sold</option>
+                    <option value="cancelled" {% if listing.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                </select>
+            </div>
+            {% endif %}
+            <div class="form-group form-group-full">
+                <label>Description</label>
+                <textarea name="description" placeholder="Describe your produce — quality, certifications, sourcing...">{{ listing.description if listing else '' }}</textarea>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{% if listing %}Save Changes{% else %}Create Listing{% endif %}</button>
+            <a href="{{ url_for('my_listings') }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function fillCropName(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    const name = opt.getAttribute('data-name');
+    if (name) document.getElementById('crop_name').value = name;
+}
+</script>
+{% endblock %}

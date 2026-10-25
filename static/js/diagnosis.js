@@ -228,9 +228,14 @@ async function submitDiagnosis() {
             }
         }, 500);
 
-        // Submit to backend
+        // Submit to backend with CSRF protection
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const headers = {};
+        if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+
         const response = await fetch('/api/diagnose', {
             method: 'POST',
+            headers: headers,
             body: formData
         });
         
@@ -247,16 +252,19 @@ async function submitDiagnosis() {
         if (progressText) progressText.textContent = '100%';
         
         // Redirect to results page
-        // In a real implementation, you would pass the results or use session storage
-        showToast('Diagnosis complete!', 'success');
+        if (window.toast) window.toast.success('Diagnosis complete!');
         setTimeout(() => {
-            window.location.href = '/diagnosis/results';
-        }, 1000);
+            if (result.session_ref) {
+                window.location.href = `/diagnosis/results?ref=${encodeURIComponent(result.session_ref)}`;
+            } else {
+                window.location.href = '/diagnosis/results';
+            }
+        }, 800);
         
     } catch (error) {
         if (progressInterval) clearInterval(progressInterval);
         console.error('Diagnosis error:', error);
-        showToast('Diagnosis failed. Please try again.', 'error');
+        if (window.toast) window.toast.error('We couldn\'t complete that right now. Please try again.');
         
         // Hide loading, show form again
         document.getElementById('loading-state').classList.add('hidden');

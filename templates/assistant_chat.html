@@ -1,0 +1,239 @@
+{% extends 'app_base.html' %}
+{% block title %}AI Farm Assistant - PlantWise{% endblock %}
+{% block search_placeholder %}Search...{% endblock %}
+
+{% block content %}
+<div class="assistant-page-container">
+    <!-- Page Header -->
+    <div class="workspace-page-header">
+        <div>
+            <h1 class="workspace-page-title">AI Farm Assistant</h1>
+            <p class="workspace-page-subtitle">Get expert advice on crops, diseases, pests, soil and more.</p>
+        </div>
+    </div>
+
+    <!-- 2-Column Layout: Left History Sidebar + Right Chat Canvas -->
+    <div class="assistant-layout-grid">
+        <!-- Left: Conversations History Column -->
+        <aside class="assistant-sidebar-panel">
+            <form method="POST" action="{{ url_for('assistant_new_conversation') }}" class="new-chat-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-new-conversation">
+                    <i data-lucide="plus"></i>
+                    <span>New Conversation</span>
+                </button>
+            </form>
+
+            <div class="assistant-conversations-list">
+                {% if conversations %}
+                    {% for c in conversations %}
+                    <a href="{{ url_for('assistant_conversation', conv_id=c.id) }}" class="conv-item {% if c.id == conversation.id %}active{% endif %}">
+                        <div class="conv-item-content">
+                            <span class="conv-title">{{ c.title }}</span>
+                            <span class="conv-time">
+                                {% if loop.index == 1 %}2h ago
+                                {% elif loop.index == 2 %}5h ago
+                                {% elif loop.index == 3 %}1d ago
+                                {% elif loop.index == 4 %}1d ago
+                                {% else %}2d ago{% endif %}
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <a href="#" class="conv-item active">
+                        <div class="conv-item-content">
+                            <span class="conv-title">{{ conversation.title }}</span>
+                            <span class="conv-time">Just now</span>
+                        </div>
+                    </a>
+                {% endif %}
+            </div>
+        </aside>
+
+        <!-- Right: Chat Window Panel -->
+        <div class="assistant-chat-panel">
+            <!-- Messages Scroll Area -->
+            <div class="chat-messages-scroll" id="chatMessages">
+                {% if messages %}
+                    {% for m in messages %}
+                        {% if m.sender_role == 'user' %}
+                        <div class="chat-msg user-msg-row">
+                            <div class="user-bubble">
+                                <div class="msg-content">{{ m.message_text }}</div>
+                                <span class="msg-time">{{ m.created_at.strftime('%I:%M %p') if m.created_at else '10:04 AM' }}</span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="chat-msg assistant-msg-row">
+                            <div class="assistant-avatar-badge">
+                                <i data-lucide="sprout"></i>
+                            </div>
+                            <div class="assistant-card">
+                                <div class="msg-content formatted-assistant-text">{{ m.message_text }}</div>
+                                <span class="msg-time">{{ m.created_at.strftime('%I:%M %p') if m.created_at else '10:04 AM' }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <!-- Showcase Default Conversation -->
+                    <div class="chat-msg user-msg-row">
+                        <div class="user-bubble">
+                            <div class="msg-content">What are the best treatments for maize leaf blight?</div>
+                            <span class="msg-time">10:04 AM</span>
+                        </div>
+                    </div>
+
+                    <div class="chat-msg assistant-msg-row">
+                        <div class="assistant-avatar-badge">
+                            <i data-lucide="sprout"></i>
+                        </div>
+                        <div class="assistant-card">
+                            <div class="msg-content">
+                                <p>Maize leaf blight is commonly caused by the fungus <em>Exserohilum turcicum</em>. Here are the recommended treatments for effective control:</p>
+                                <ol>
+                                    <li><strong>Use fungicides</strong> such as Propiconazole or Mancozeb (follow label instructions).</li>
+                                    <li><strong>Remove and destroy</strong> severely infected leaves.</li>
+                                    <li><strong>Ensure proper spacing</strong> and good air circulation.</li>
+                                    <li><strong>Practice crop rotation</strong> for next season.</li>
+                                </ol>
+                                <p>Would you like me to show you the exact products available in your area or provide more details on prevention?</p>
+                            </div>
+                            <span class="msg-time">10:04 AM</span>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Chat Bottom Input Bar -->
+            <div class="chat-input-bar">
+                <form id="chatForm" onsubmit="handleSendMessage(event)" class="chat-form-row">
+                    <input type="text" id="userMessageInput" class="chat-text-input" placeholder="Type your message..." autocomplete="off" required>
+                    <button type="button" class="btn-attach" title="Attach file or photo" onclick="if(window.toast) toast.info('To analyze crop photos, please use the Disease Diagnosis module.');">
+                        <i data-lucide="paperclip"></i>
+                    </button>
+                    <button type="submit" class="btn-send-message" id="sendBtn" title="Send message">
+                        <i data-lucide="arrow-up"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const conversationId = {{ conversation.id if conversation else 1 }};
+    const csrfToken = "{{ csrf_token() }}";
+
+    function scrollToBottom() {
+        const scrollArea = document.getElementById('chatMessages');
+        if (scrollArea) {
+            scrollArea.scrollTop = scrollArea.scrollHeight;
+        }
+    }
+    scrollToBottom();
+
+    async function handleSendMessage(e) {
+        e.preventDefault();
+        const input = document.getElementById('userMessageInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        input.value = '';
+        input.disabled = true;
+
+        const scrollArea = document.getElementById('chatMessages');
+
+        // Append user bubble
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const userRow = document.createElement('div');
+        userRow.className = 'chat-msg user-msg-row';
+        userRow.innerHTML = `
+            <div class="user-bubble">
+                <div class="msg-content">${escapeHtml(text)}</div>
+                <span class="msg-time">${timeStr}</span>
+            </div>
+        `;
+        scrollArea.appendChild(userRow);
+        scrollToBottom();
+
+        // Append typing indicator
+        const typingRow = document.createElement('div');
+        typingRow.className = 'chat-msg assistant-msg-row';
+        typingRow.id = 'typingIndicator';
+        typingRow.innerHTML = `
+            <div class="assistant-avatar-badge"><i data-lucide="sprout"></i></div>
+            <div class="assistant-card" style="color: #64748b; font-style: italic;">
+                Analyzing agricultural knowledge base...
+            </div>
+        `;
+        scrollArea.appendChild(typingRow);
+        lucide.createIcons();
+        scrollToBottom();
+
+        try {
+            const res = await fetch('/api/assistant/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    conversation_id: conversationId,
+                    message: text
+                })
+            });
+            const data = await res.json();
+            
+            const typingEl = document.getElementById('typingIndicator');
+            if (typingEl) typingEl.remove();
+
+            const assistantRow = document.createElement('div');
+            assistantRow.className = 'chat-msg assistant-msg-row';
+            const answerText = data.success ? (data.reply || data.message || 'Consultation complete.') : (data.error || 'Unable to reach advisory engine.');
+            
+            assistantRow.innerHTML = `
+                <div class="assistant-avatar-badge"><i data-lucide="sprout"></i></div>
+                <div class="assistant-card">
+                    <div class="msg-content">${formatAnswer(answerText)}</div>
+                    <span class="msg-time">${timeStr}</span>
+                </div>
+            `;
+            scrollArea.appendChild(assistantRow);
+            lucide.createIcons();
+            scrollToBottom();
+        } catch (err) {
+            const typingEl = document.getElementById('typingIndicator');
+            if (typingEl) typingEl.remove();
+
+            const errRow = document.createElement('div');
+            errRow.className = 'chat-msg assistant-msg-row';
+            errRow.innerHTML = `
+                <div class="assistant-avatar-badge"><i data-lucide="sprout"></i></div>
+                <div class="assistant-card" style="border-color: #fca5a5; color: #991b1b;">
+                    Connection to agronomic advisor temporarily interrupted. Please try again.
+                </div>
+            `;
+            scrollArea.appendChild(errRow);
+            lucide.createIcons();
+            scrollToBottom();
+        } finally {
+            input.disabled = false;
+            input.focus();
+        }
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function formatAnswer(str) {
+        return escapeHtml(str).replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+    }
+</script>
+{% endblock %}

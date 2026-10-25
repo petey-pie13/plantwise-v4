@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PlantWise Agricultural Resources - Agronomy Guides, Soil Management, and Disease Prevention">
+    <title>PlantWise - Agricultural Knowledge & Resources</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+        .resources-hero {
+            background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);
+            color: #ffffff;
+            padding: 3.5rem 1.5rem;
+            text-align: center;
+        }
+        .resources-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 3rem;
+        }
+        .resource-card {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            padding: 1.75rem;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .resource-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+        .resource-tag {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            background: #d8f3dc;
+            color: #1b4332;
+            margin-bottom: 0.75rem;
+        }
+        .resource-card h3 {
+            font-size: 1.25rem;
+            color: #1a202c;
+            margin-bottom: 0.5rem;
+        }
+        .resource-card p {
+            color: #4a5568;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1.25rem;
+        }
+        .resource-link {
+            font-weight: 600;
+            color: #2d6a4f;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            text-decoration: none;
+        }
+        .resource-link:hover {
+            color: #1b4332;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo-container" onclick="window.location.href='/'" style="cursor: pointer;">
+                <img src="{{ url_for('static', filename='Images/icon.jpg') }}" alt="PlantWise Icon" class="header-icon">
+                <div class="logo-text">
+                    <h1>PlantWise</h1>
+                    <p>Agricultural Knowledge Center</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <a href="/advisory" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Crop Advisory</a>
+                <a href="/diagnosis" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Diagnosis</a>
+                <a href="/admin" class="admin-btn"><span>Admin Panel</span></a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Resources Hero -->
+    <section class="resources-hero">
+        <div class="container">
+            <h1 style="font-size: 2.25rem; margin-bottom: 0.75rem;">Agronomy & Extension Resources</h1>
+            <p style="font-size: 1.1rem; max-width: 650px; margin: 0 auto; opacity: 0.9;">
+                Comprehensive guidelines, soil health standards, disease identification protocols, and best practices for Kenyan agricultural ecosystems.
+            </p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 1.5rem;">
+        <div class="resources-grid">
+            <div class="resource-card">
+                <div>
+                    <span class="resource-tag">Soil Management</span>
+                    <h3>Soil pH Calibration & Liming</h3>
+                    <p>Understanding soil acidity ranges across western and central Kenya highlands, optimal pH targets for maize, tea, and beans, and agricultural lime dosage formulas.</p>
+                </div>
+                <a href="/advisory" class="resource-link">Open Soil Advisor <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></a>
+            </div>
+
+            <div class="resource-card">
+                <div>
+                    <span class="resource-tag">Crop Protection</span>
+                    <h3>Maize Lethal Necrosis (MLND) Control</h3>
+                    <p>Integrated pest management strategies against vectors (thrips and chrysomelid beetles), crop rotation protocols, and certified disease-free seed selection.</p>
+                </div>
+                <a href="/diagnosis" class="resource-link">Diagnose Crop <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></a>
+            </div>
+
+            <div class="resource-card">
+                <div>
+                    <span class="resource-tag">Ecological Zones</span>
+                    <h3>Kenya Agro-Ecological Zones (AEZ)</h3>
+                    <p>Comprehensive ecological profiles matching altitude, mean annual rainfall, and temperature ranges to suitable cash and food crops across all 47 counties.</p>
+                </div>
+                <a href="/advisory" class="resource-link">Check County Suitability <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></a>
+            </div>
+
+            <div class="resource-card">
+                <div>
+                    <span class="resource-tag">Horticulture</span>
+                    <h3>Coffee & Tea Nutrition Schedules</h3>
+                    <p>Standard N-P-K nutrient application windows, micronutrient management (Zinc, Boron), and shade management techniques for smallholder farmers.</p>
+                </div>
+                <a href="/advisory" class="resource-link">Review Recommendations <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></a>
+            </div>
+
+            <div class="resource-card">
+                <div>
+                    <span class="resource-tag">IPM Protocols</span>
+                    <h3>Fungal Blight & Rust Management</h3>
+                    <p>Preventive fungicidal spray schedules, biological antagonism, spore tracking during rainy seasons, and post-harvest sanitation standards.</p>
+                </div>
+                <a href="/diagnosis" class="resource-link">Identify Symptoms <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></a>
+            </div>
+
+            <div class="resource-card">
+                <div>
+                    <span class="resource-tag">Smart Farming</span>
+                    <h3>Digital Advisory User Guide</h3>
+                    <p>How to use mobile photo uploads for AI vision analysis, interpreting diagnostic confidence percentages, and submitting field feedback.</p>
+                </div>
+                <a href="/" class="resource-link">Explore Platform <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i></a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer" style="background: #111827; color: #9ca3af; padding: 2.5rem 1.5rem; text-align: center;">
+        <p>&copy; PlantWise Agricultural Expert System. Restored and verified.</p>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

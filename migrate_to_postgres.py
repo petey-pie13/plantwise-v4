@@ -14,17 +14,18 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 import psycopg2
 import os
-from dotenv import load_dotenv
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
-MYSQL_EXPORT_FILE = r"C:\Users\user\OneDrive\Desktop\mysql_export.sql"
+MYSQL_EXPORT_FILE = os.getenv('MYSQL_EXPORT_FILE', r"C:\Users\user\OneDrive\Desktop\mysql_export.sql")
 
 PG_CONFIG = {
-    "host":     "localhost",
-    "port":     5432,
-    "user":     "postgres",
-    "password": "Audi_123",   # ← YOUR postgres password from Step 1
-    "dbname":   "crop_advisory",
+    "host":     os.getenv("DB_HOST", "localhost"),
+    "port":     int(os.getenv("DB_PORT", 5432)),
+    "user":     os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "dbname":   os.getenv("DB_NAME", "crop_advisory"),
 }
 # ──────────────────────────────────────────────────────────────────────────────
 

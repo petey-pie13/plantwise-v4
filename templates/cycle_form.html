@@ -1,0 +1,57 @@
+﻿{% extends 'app_base.html' %}
+{% block title %}New Crop Cycle - PlantWise{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>Add Crop Cycle{% if farm %} — {{ farm.name }}{% endif %}</h1></div>
+    <a href="{{ url_for('farm_detail', farm_id=farm.id) }}" class="btn btn-ghost btn-sm">← Back to Farm</a>
+</div>
+<div class="form-card">
+    <form method="POST" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Crop</label>
+                <select name="crop_id">
+                    <option value="">-- Select Crop --</option>
+                    {% for c in crops %}
+                    <option value="{{ c.crop_id }}">{{ c.crop_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Variety Name</label>
+                <input type="text" name="variety_name" placeholder="e.g. H614D Maize">
+            </div>
+            <div class="form-group">
+                <label>Area (ha)</label>
+                <input type="number" name="area_ha" step="0.01" min="0" placeholder="e.g. 1.5">
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status">
+                    <option value="planned">Planned</option>
+                    <option value="active">Active</option>
+                    <option value="harvested">Harvested</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Planting Date</label>
+                <input type="date" name="planting_date">
+            </div>
+            <div class="form-group">
+                <label>Expected Harvest Date</label>
+                <input type="date" name="expected_harvest">
+            </div>
+            <div class="form-group form-group-full">
+                <label>Notes</label>
+                <textarea name="notes" placeholder="Any observations or plans..."></textarea>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Add Crop Cycle</button>
+            <a href="{{ url_for('farm_detail', farm_id=farm.id) }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

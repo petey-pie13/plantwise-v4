@@ -1,0 +1,166 @@
+{% extends 'app_base.html' %}
+{% block title %}Dashboard - PlantWise{% endblock %}
+{% block search_placeholder %}Search crops, diseases, or get advice...{% endblock %}
+
+{% block content %}
+<div class="dashboard-page-container">
+    <!-- Page Title & Subtitle -->
+    <div class="workspace-page-header">
+        <div>
+            <h1 class="workspace-page-title">Dashboard</h1>
+            <p class="workspace-page-subtitle">Your farm at a glance</p>
+        </div>
+    </div>
+
+    <!-- 4 KPI Metric Cards -->
+    <div class="dashboard-kpi-grid">
+        <!-- 1. Total Farms -->
+        <a href="{{ url_for('farm_list') }}" class="kpi-card">
+            <div class="kpi-header">
+                <div class="kpi-icon-circle">
+                    <i data-lucide="layers"></i>
+                </div>
+                <span class="kpi-label">Total Farms</span>
+            </div>
+            <div class="kpi-value">{{ farms_count }}</div>
+            <div class="kpi-link">View farms &rarr;</div>
+        </a>
+
+        <!-- 2. Active Crops -->
+        <a href="{{ url_for('advisory') }}" class="kpi-card">
+            <div class="kpi-header">
+                <div class="kpi-icon-circle">
+                    <i data-lucide="sprout"></i>
+                </div>
+                <span class="kpi-label">Active Crops</span>
+            </div>
+            <div class="kpi-value">{{ active_crops_count }}</div>
+            <div class="kpi-link">View crops &rarr;</div>
+        </a>
+
+        <!-- 3. Upcoming Tasks -->
+        <a href="{{ url_for('calendar_home') }}" class="kpi-card">
+            <div class="kpi-header">
+                <div class="kpi-icon-circle">
+                    <i data-lucide="calendar"></i>
+                </div>
+                <span class="kpi-label">Upcoming Tasks</span>
+            </div>
+            <div class="kpi-value">{{ upcoming_tasks_count }}</div>
+            <div class="kpi-link">View calendar &rarr;</div>
+        </a>
+
+        <!-- 4. Recent Alerts -->
+        <a href="{{ url_for('weather_alerts_view') }}" class="kpi-card">
+            <div class="kpi-header">
+                <div class="kpi-icon-circle">
+                    <i data-lucide="bell"></i>
+                </div>
+                <span class="kpi-label">Recent Alerts</span>
+            </div>
+            <div class="kpi-value">{{ alerts_count }}</div>
+            <div class="kpi-link">View alerts &rarr;</div>
+        </a>
+    </div>
+
+    <!-- Two-Column Section: Weather Forecast & Recommended Crops -->
+    <div class="dashboard-content-split">
+        <!-- Left: Weather Forecast -->
+        <div class="content-panel-card weather-panel">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title">Weather Forecast &mdash; {{ county_name }}</h3>
+                    <span class="panel-badge-today">Today</span>
+                </div>
+                <a href="{{ url_for('weather_alerts_view') }}" class="panel-header-link">Full forecast</a>
+            </div>
+
+            <div class="weather-current-row">
+                <div class="weather-temp-cluster">
+                    <div class="weather-temp-value">22&deg;C</div>
+                    <div class="weather-temp-cond">Partly Cloudy</div>
+                </div>
+                <div class="weather-hero-icon">
+                    <i data-lucide="cloud-sun"></i>
+                </div>
+            </div>
+
+            <!-- Weather Metrics Grid -->
+            <div class="weather-metrics-triplet">
+                <div class="metric-item">
+                    <span class="metric-title">Humidity</span>
+                    <span class="metric-num">68%</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-title">Wind</span>
+                    <span class="metric-num">12 km/h</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-title">Rain Chance</span>
+                    <span class="metric-num">20%</span>
+                </div>
+            </div>
+
+            <!-- 5-Day Mini Forecast Bar -->
+            <div class="weather-minibar">
+                <div class="minibar-day">
+                    <span class="day-name">Mon</span>
+                    <i data-lucide="cloud-sun" class="minibar-icon"></i>
+                    <span class="day-temp">21&deg;/13&deg;</span>
+                </div>
+                <div class="minibar-day">
+                    <span class="day-name">Tue</span>
+                    <i data-lucide="sun" class="minibar-icon"></i>
+                    <span class="day-temp">22&deg;/14&deg;</span>
+                </div>
+                <div class="minibar-day">
+                    <span class="day-name">Wed</span>
+                    <i data-lucide="sun" class="minibar-icon"></i>
+                    <span class="day-temp">23&deg;/14&deg;</span>
+                </div>
+                <div class="minibar-day">
+                    <span class="day-name">Thu</span>
+                    <i data-lucide="cloud-rain" class="minibar-icon"></i>
+                    <span class="day-temp">22&deg;/13&deg;</span>
+                </div>
+                <div class="minibar-day">
+                    <span class="day-name">Fri</span>
+                    <i data-lucide="cloud-sun" class="minibar-icon"></i>
+                    <span class="day-temp">21&deg;/12&deg;</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Recommended Crops -->
+        <div class="content-panel-card recommended-panel">
+            <div class="panel-header">
+                <div>
+                    <h3 class="panel-title">Recommended Crops</h3>
+                    <p class="panel-subtitle">Based on your location and soil conditions</p>
+                </div>
+                <a href="{{ url_for('advisory') }}" class="panel-header-link">View all</a>
+            </div>
+
+            <div class="recommended-crop-list">
+                {% for crop in recommended_crops %}
+                <div class="recommended-crop-item">
+                    <div class="crop-info-meta">
+                        <div class="crop-badge-icon">
+                            <i data-lucide="{{ crop.icon }}"></i>
+                        </div>
+                        <div class="crop-names">
+                            <span class="crop-title">{{ crop.name }}</span>
+                            <span class="crop-variety">{{ crop.variety }}</span>
+                        </div>
+                        <span class="crop-percentage">{{ crop.suitability }}% suitability</span>
+                    </div>
+                    <div class="suitability-progress-track">
+                        <div class="suitability-progress-bar" style="width: {{ crop.suitability }}%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

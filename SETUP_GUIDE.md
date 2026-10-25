@@ -16,15 +16,15 @@
 
 ### Minimum Requirements
 - **Operating System**: Windows 10+, macOS 10.14+, or Linux (Ubuntu 20.04+)
-- **Python**: 3.8 or higher
-- **MySQL**: 8.0 or higher
+- **Python**: 3.10 or higher (compatible with Python 3.11 - 3.14)
+- **PostgreSQL**: 14.0 or higher
 - **RAM**: 4GB minimum
 - **Storage**: 500MB free space
 - **Browser**: Chrome 90+, Firefox 88+, Safari 14+, or Edge 90+
 
 ### Recommended Requirements
-- Python 3.10+
-- MySQL 8.0+
+- Python 3.11+
+- PostgreSQL 15+ / 16+
 - 8GB RAM
 - SSD storage
 
@@ -35,34 +35,19 @@
 ### Step 1: Install Python
 ```bash
 # Check Python version
-python --version  # Should be 3.8+
-
-# If not installed, download from python.org
-# Windows: https://www.python.org/downloads/windows/
-# macOS: brew install python3
-# Linux: sudo apt-get install python3 python3-pip
+python --version  # Should be 3.10+
 ```
 
-### Step 2: Install MySQL
+### Step 2: Install and Start PostgreSQL
 ```bash
-# Windows: Download from https://dev.mysql.com/downloads/installer/
-# macOS: brew install mysql
-# Linux: sudo apt-get install mysql-server
-
-# Start MySQL service
-# Windows: Services > MySQL > Start
-# macOS: brew services start mysql
-# Linux: sudo systemctl start mysql
+# Windows: Download and install from https://www.postgresql.org/download/windows/
+# macOS: brew install postgresql@16 && brew services start postgresql@16
+# Linux: sudo apt update && sudo apt install postgresql postgresql-contrib && sudo systemctl start postgresql
 ```
 
 ### Step 3: Clone/Download Project
 ```bash
-# If using git
-git clone <repository-url>
-cd plantwise
-
-# Or extract downloaded ZIP file
-cd path/to/plantwise
+cd "c:\Users\user\OneDrive\Desktop\Pending Projects\plantwise-v4"
 ```
 
 ### Step 4: Create Virtual Environment
@@ -76,20 +61,11 @@ venv\Scripts\activate
 
 # macOS/Linux:
 source venv/bin/activate
-
-# You should see (venv) in your terminal prompt
 ```
 
 ### Step 5: Install Dependencies
 ```bash
-# Install all required packages
 pip install -r requirements.txt
-
-# Or install manually:
-pip install Flask==3.0.0
-pip install Flask-CORS==4.0.0
-pip install mysql-connector-python==8.2.0
-pip install python-dotenv==1.0.0
 ```
 
 ---
@@ -98,36 +74,32 @@ pip install python-dotenv==1.0.0
 
 ### Step 1: Create Database
 ```sql
--- Log into MySQL
-mysql -u root -p
+-- Connect to PostgreSQL:
+psql -U postgres
 
--- Create database
+-- Create database:
 CREATE DATABASE crop_advisory;
-USE crop_advisory;
+\q
 ```
 
-### Step 2: Import Existing Schema
-```sql
--- If you have a SQL dump file
-mysql -u root -p crop_advisory < crop_advisory.sql
+### Step 2: Import Schema & Run Migrations
+```bash
+# 1. Import base schema & knowledge base:
+psql -U postgres -d crop_advisory -f "Plantwise agricultural expert system database.sql"
 
--- Or manually create tables if needed
+# 2. Synchronize PostgreSQL primary key sequences:
+python fix_sequences.py
+
+# 3. Apply V4 Stage 1-3 Schema (Users, Farms, Crop Cycles, Marketplace, AI Assistant):
+psql -U postgres -d crop_advisory -f "migrations/001_add_users_farms_marketplace.sql"
+
+# 4. Apply V4 Stage 5 Schema (Crop Calendar Tasks, Weather Alerts, Notifications):
+psql -U postgres -d crop_advisory -f "migrations/002_add_calendar_and_alerts.sql"
 ```
 
-### Step 3: Verify Database Structure
-```sql
--- Check tables exist
-SHOW TABLES;
-
--- Should show:
--- kenya_counties
--- crops
--- crop_suitability
-
--- Verify data
-SELECT COUNT(*) FROM kenya_counties;
-SELECT COUNT(*) FROM crops;
-SELECT COUNT(*) FROM crop_suitability;
+### Step 3: Verify Database Tables & Sequences
+```bash
+python -c "from app import test_database_connection; print(test_database_connection())"
 ```
 
 ### Step 4: Configure Environment Variables
@@ -135,18 +107,22 @@ SELECT COUNT(*) FROM crop_suitability;
 # Copy example env file
 cp .env.example .env
 
-# Edit .env with your database credentials
+# Edit .env with your PostgreSQL credentials
 # Windows: notepad .env
 # macOS/Linux: nano .env
 ```
 
 Update the following in `.env`:
 ```env
+SECRET_KEY=your_secure_random_hex_key
 DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_USER=postgres
+DB_PASSWORD=your_postgres_password
 DB_NAME=crop_advisory
-DB_PORT=3306
+DB_PORT=5432
+OPENROUTER_API_KEY=your_openrouter_api_key_optional
+FLASK_ENV=development
+FLASK_DEBUG=False
 ```
 
 ---
@@ -234,6 +210,22 @@ gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ---
 
 ## 🧪 Testing Guide
+
+### Automated Regression & Acceptance Test Suites
+
+Run the full 24-point automated test suite covering all legacy and V4 capabilities:
+```bash
+python -m unittest discover tests
+```
+
+Or run targeted test modules:
+```bash
+# 1. Legacy & Baseline Regression Suite (14 tests):
+python -m unittest tests/test_system.py
+
+# 2. PlantWise V4 Implementation Acceptance Suite (10 tests):
+python -m unittest tests/test_v4_features.py
+```
 
 ### Manual Testing Checklist
 
