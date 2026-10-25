@@ -467,6 +467,7 @@ def calculate_suitability_score(soil_ph: float, rainfall_mm: int, temp_c: int,
 _REF_CACHE_LOCK = threading.Lock()
 _REF_CACHE = {
     'counties': {'data': None, 'expires_at': 0},
+    'counties_records': {'data': None, 'expires_at': 0},
     'crops': {'data': None, 'expires_at': 0},
     'sub_counties': {}  # {county_lower: {'data': [...], 'expires_at': 0}}
 }
@@ -509,6 +510,45 @@ def get_all_counties() -> List[str]:
         
     except Error as e:
         logger.error(f"Error fetching counties: {e}")
+        return []
+    finally:
+        close_db_connection(connection, cursor)
+
+
+def get_all_counties_records() -> List[Dict]:
+    """
+    Fetch all counties from kenya_counties table as dictionaries with county_id and county_name.
+    Used for HTML dropdown selectors where the ID is stored as foreign key.
+    
+    Returns:
+        List of dicts: [{'county_id': int, 'county_name': str}, ...]
+    """
+    now = time.time()
+    with _REF_CACHE_LOCK:
+        cached = _REF_CACHE.get('counties_records')
+        if cached is not None and cached['data'] is not None and now < cached['expires_at']:
+            return list(cached['data'])
+
+    connection = get_db_connection()
+    if not connection:
+        logger.error("Failed to connect to database in get_all_counties_records")
+        return []
+
+    cursor = None
+    try:
+        cursor = connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor.execute("SELECT county_id, county_name FROM kenya_counties ORDER BY county_name ASC")
+        rows = [dict(r) for r in cursor.fetchall()]
+
+        with _REF_CACHE_LOCK:
+            _REF_CACHE['counties_records'] = {
+                'data': rows,
+                'expires_at': now + _REF_CACHE_TTL
+            }
+
+        return rows
+    except Exception as e:
+        logger.error(f"Error fetching counties records: {e}")
         return []
     finally:
         close_db_connection(connection, cursor)
@@ -2466,24 +2506,57 @@ def api_get_sub_counties():
             'success': False,
             'error': 'County or county_id parameter is required'
         }), 400
-    
-    if county_id and not county:
-        conn = get_db_connection()
-        if conn:
-            try:
-                cur = conn.cursor()
-                cur.execute("SELECT county_name FROM kenya_counties WHERE county_id = %s", (county_id,))
-                row = cur.fetchone()
-                if row:
-                    county = row[0]
-            finally:
-                close_db_connection(conn, cur)
-    
-    sub_counties = get_sub_counties_by_county(county) if county else []
+
+    items = []
+    sub_counties = []
+    resolved_county = county
+    resolved_county_id = None
+
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            if county_id:
+                cur.execute(
+                    """SELECT sc.sub_county_id, sc.sub_county_name, kc.county_name, kc.county_id
+                       FROM sub_counties sc
+                       JOIN kenya_counties kc ON sc.county_id = kc.county_id
+                       WHERE sc.county_id = %s
+                       ORDER BY sc.sub_county_name ASC""",
+                    (county_id,)
+                )
+            else:
+                cur.execute(
+                    """SELECT sc.sub_county_id, sc.sub_county_name, kc.county_name, kc.county_id
+                       FROM sub_counties sc
+                       JOIN kenya_counties kc ON sc.county_id = kc.county_id
+                       WHERE LOWER(kc.county_name) = LOWER(%s)
+                       ORDER BY sc.sub_county_name ASC""",
+                    (county,)
+                )
+            rows = cur.fetchall()
+            if rows:
+                resolved_county = rows[0]['county_name']
+                resolved_county_id = rows[0]['county_id']
+                items = [{'sub_county_id': r['sub_county_id'], 'sub_county_name': r['sub_county_name']} for r in rows]
+                sub_counties = [r['sub_county_name'] for r in rows]
+        except Exception as e:
+            logger.error(f"Error in api_get_sub_counties: {e}")
+        finally:
+            close_db_connection(conn, cur)
+
+    # Fallback to in-memory cache if DB query returned nothing and county is set
+    if not items and resolved_county:
+        fallback_names = get_sub_counties_by_county(resolved_county)
+        sub_counties = fallback_names
+        items = [{'sub_county_id': None, 'sub_county_name': name} for name in fallback_names]
+
     return jsonify({
         'success': True,
         'sub_counties': sub_counties,
-        'county': county,
+        'items': items,
+        'county': resolved_county,
+        'county_id': resolved_county_id,
         'count': len(sub_counties)
     })
 
@@ -3684,7 +3757,7 @@ def farm_list():
 def farm_new():
     """Create a new farm."""
     user = get_current_user()
-    counties = get_all_counties()
+    counties = get_all_counties_records()
     if request.method == 'POST':
         name    = request.form.get('name', '').strip()
         area    = request.form.get('total_area_ha', '').strip() or None
@@ -3758,7 +3831,7 @@ def farm_detail(farm_id):
 def farm_edit(farm_id):
     """Edit a farm (owner only)."""
     user = get_current_user()
-    counties = get_all_counties()
+    counties = get_all_counties_records()
     conn = get_db_connection()
     farm = None
     if conn:
@@ -4039,7 +4112,7 @@ def my_listings():
 def listing_new():
     """Create a new produce listing."""
     user = get_current_user()
-    counties = get_all_counties()
+    counties = get_all_counties_records()
     conn = get_db_connection()
     crops_list = []
     if conn:
@@ -4125,7 +4198,7 @@ def listing_edit(listing_id):
     """Edit own listing."""
     user = get_current_user()
     conn = get_db_connection()
-    listing, counties, crops_list = None, get_all_counties(), []
+    listing, counties, crops_list = None, get_all_counties_records(), []
     if conn:
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

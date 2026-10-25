@@ -1,4 +1,4 @@
-﻿{% extends 'app_base.html' %}
+{% extends 'app_base.html' %}
 {% block title %}{% if farm %}Edit Farm{% else %}New Farm{% endif %} - PlantWise{% endblock %}
 {% block content %}
 <div class="page-header">
@@ -50,21 +50,58 @@
 {% endblock %}
 {% block extra_scripts %}
 <script>
-document.getElementById('county_id').addEventListener('change', function() {
-    const cid = this.value;
+function loadSubCounties(cid, selectedSubCountyId) {
     const ssc = document.getElementById('sub_county_id');
+    if (!ssc) return;
+    
     ssc.innerHTML = '<option value="">-- Select Sub-County --</option>';
-    if (!cid) return;
-    fetch('/api/sub-counties?county_id=' + cid)
-        .then(r => r.json())
-        .then(data => {
-            (data.sub_counties || []).forEach(s => {
+    if (!cid) {
+        ssc.disabled = false;
+        return;
+    }
+    
+    ssc.disabled = true;
+    ssc.innerHTML = '<option value="">Loading sub-counties...</option>';
+    
+    fetch('/api/sub-counties?county_id=' + encodeURIComponent(cid))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            ssc.disabled = false;
+            ssc.innerHTML = '<option value="">-- Select Sub-County --</option>';
+            const list = data.items || data.sub_counties || [];
+            list.forEach(function(s) {
                 const opt = document.createElement('option');
-                opt.value = s.sub_county_id;
-                opt.textContent = s.sub_county_name;
+                if (typeof s === 'object' && s !== null) {
+                    opt.value = s.sub_county_id || s.id;
+                    opt.textContent = s.sub_county_name || s.name;
+                } else {
+                    opt.value = s;
+                    opt.textContent = s;
+                }
+                if (selectedSubCountyId && String(opt.value) === String(selectedSubCountyId)) {
+                    opt.selected = true;
+                }
                 ssc.appendChild(opt);
             });
+        })
+        .catch(function(err) {
+            ssc.disabled = false;
+            ssc.innerHTML = '<option value="">-- Select Sub-County --</option>';
+            console.error('Error fetching sub-counties:', err);
         });
+}
+
+document.getElementById('county_id').addEventListener('change', function() {
+    loadSubCounties(this.value, null);
+});
+
+// Initialize sub-counties on load if county is already selected (e.g. edit mode)
+document.addEventListener('DOMContentLoaded', function() {
+    const countySelect = document.getElementById('county_id');
+    const initialSubCountyId = "{{ farm.sub_county_id if farm and farm.sub_county_id else '' }}";
+    if (countySelect && countySelect.value) {
+        loadSubCounties(countySelect.value, initialSubCountyId);
+    }
 });
 </script>
 {% endblock %}
