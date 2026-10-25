@@ -1,26 +1,86 @@
-﻿{% extends 'app_base.html' %}
-{% block title %}My Orders - PlantWise{% endblock %}
+{% extends 'app_base.html' %}
+{% block title %}My Purchases - PlantWise{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>My Orders</h1><p>Track your purchase history</p></div></div>
+<div class="workspace-page-header">
+    <div>
+        <h1 class="workspace-page-title">My Purchases</h1>
+        <p class="workspace-page-subtitle">Track produce you have requested or ordered from farmers</p>
+    </div>
+    <div class="workspace-page-actions">
+        <a href="{{ url_for('marketplace') }}" class="btn btn-primary">
+            <i data-lucide="shopping-cart" style="width:16px;height:16px;"></i>
+            <span>Browse Produce</span>
+        </a>
+    </div>
+</div>
+
+<!-- Marketplace Tabs -->
+<div class="marketplace-nav-tabs">
+    <a href="{{ url_for('marketplace') }}" class="marketplace-tab">Browse Market</a>
+    <a href="{{ url_for('my_listings') }}" class="marketplace-tab">My Listings</a>
+    <a href="{{ url_for('seller_orders') }}" class="marketplace-tab">
+        Incoming Requests
+        {% if pending_incoming_orders_count and pending_incoming_orders_count > 0 %}
+        <span class="badge-tab-count">{{ pending_incoming_orders_count }}</span>
+        {% endif %}
+    </a>
+    <a href="{{ url_for('my_orders') }}" class="marketplace-tab active">My Purchases</a>
+</div>
+
 {% if orders %}
 <div class="data-card">
-    <table class="data-table">
-        <thead><tr><th>Crop</th><th>Qty (kg)</th><th>Total (KES)</th><th>Seller</th><th>Status</th><th>Date</th></tr></thead>
-        <tbody>
-        {% for o in orders %}
-        <tr>
-            <td><strong>{{ o.crop_name }}</strong>{% if o.variety_name %}<br><span style="font-size:.8rem;color:var(--text-light);">{{ o.variety_name }}</span>{% endif %}</td>
-            <td>{{ o.quantity_kg }}</td>
-            <td>{{ "%.2f"|format(o.total_amount) }}</td>
-            <td>{{ o.seller_name }}</td>
-            <td><span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['pending','accepted'] %}badge-info{% elif o.status in ['dispatched'] %}badge-purple{% elif o.status in ['rejected','cancelled','disputed'] %}badge-error{% else %}badge-warning{% endif %}">{{ o.status }}</span></td>
-            <td style="font-size:.8rem;color:var(--text-light);">{{ o.created_at.strftime('%d %b %Y') if o.created_at else '—' }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+    <div style="overflow-x: auto;">
+        <table class="data-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Produce Crop</th>
+                    <th>Qty (kg)</th>
+                    <th>Total (KES)</th>
+                    <th>Seller</th>
+                    <th>Status</th>
+                    <th>Order Date</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for o in orders %}
+            <tr>
+                <td>
+                    <strong>{{ o.crop_name }}</strong>
+                    {% if o.variety_name %}
+                    <br><span style="font-size:0.8rem; color:var(--text-light, #94a3b8);">{{ o.variety_name }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span style="font-weight:700;">{{ o.quantity_kg }} kg</span>
+                </td>
+                <td>
+                    <strong>KES {{ "%.2f"|format(o.total_amount) }}</strong>
+                </td>
+                <td>{{ o.seller_name }}</td>
+                <td>
+                    <span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['accepted'] %}badge-info{% elif o.status == 'pending' %}badge-warning{% elif o.status in ['dispatched'] %}badge-purple{% elif o.status in ['rejected','cancelled','disputed'] %}badge-error{% else %}badge-info{% endif %}">
+                        {% if o.status == 'pending' %}Waiting for Seller
+                        {% elif o.status == 'accepted' %}Approved by Seller
+                        {% elif o.status == 'rejected' %}Denied by Seller
+                        {% elif o.status == 'cancelled' %}Cancelled
+                        {% else %}{{ o.status.title() }}{% endif %}
+                    </span>
+                </td>
+                <td style="font-size:0.8rem; color:var(--text-light, #94a3b8); white-space:nowrap;">
+                    {{ o.created_at.strftime('%d %b %Y, %H:%M') if o.created_at else '—' }}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% else %}
-<div class="empty-state"><div class="empty-state-icon">📦</div><h3>No orders yet</h3><p>Browse the marketplace and place your first order.</p><a href="{{ url_for('marketplace') }}" class="btn btn-primary">Browse Marketplace</a></div>
+<div class="empty-state">
+    <div class="empty-state-icon">📦</div>
+    <h3>No purchases yet</h3>
+    <p>Browse our verified local farm produce listings and place your first order.</p>
+    <a href="{{ url_for('marketplace') }}" class="btn btn-primary">Browse Marketplace</a>
+</div>
 {% endif %}
 {% endblock %}

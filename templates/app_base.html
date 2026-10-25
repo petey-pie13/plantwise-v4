@@ -51,6 +51,9 @@
             <a href="{{ url_for('marketplace') }}" class="sidebar-nav-item {% if 'marketplace' in request.endpoint or 'listing' in request.endpoint or 'order' in request.endpoint %}active{% endif %}">
                 <i data-lucide="shopping-bag"></i>
                 <span>{{ t.marketplace }}</span>
+                {% if pending_incoming_orders_count and pending_incoming_orders_count > 0 %}
+                <span class="sidebar-badge-count" title="{{ pending_incoming_orders_count }} incoming request(s)">{{ pending_incoming_orders_count }}</span>
+                {% endif %}
             </a>
 
             <!-- 5. AI Assistant -->

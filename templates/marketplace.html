@@ -24,13 +24,17 @@
         </div>
     </div>
 
-    <!-- Marketplace Tabs: Browse & My Listings -->
+    <!-- Marketplace Tabs -->
     <div class="marketplace-nav-tabs">
-        <a href="{{ url_for('marketplace') }}" class="marketplace-tab active">Browse</a>
+        <a href="{{ url_for('marketplace') }}" class="marketplace-tab active">Browse Market</a>
         <a href="{{ url_for('my_listings') }}" class="marketplace-tab">My Listings</a>
-        {% if user and user.role == 'buyer' %}
-        <a href="{{ url_for('my_orders') }}" class="marketplace-tab">My Orders</a>
-        {% endif %}
+        <a href="{{ url_for('seller_orders') }}" class="marketplace-tab">
+            Incoming Requests
+            {% if pending_incoming_orders_count and pending_incoming_orders_count > 0 %}
+            <span class="badge-tab-count">{{ pending_incoming_orders_count }}</span>
+            {% endif %}
+        </a>
+        <a href="{{ url_for('my_orders') }}" class="marketplace-tab">My Purchases</a>
     </div>
 
     <!-- Filter Control Bar -->

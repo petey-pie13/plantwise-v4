@@ -1184,8 +1184,27 @@ def user_login_required(f):
 
 @app.context_processor
 def inject_user():
-    """Inject current authenticated user into all templates."""
-    return {'current_user': get_current_user(), 'user': get_current_user()}
+    """Inject current authenticated user and pending incoming orders count into all templates."""
+    u = get_current_user()
+    pending_incoming = 0
+    if u and u.get('id'):
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM orders WHERE seller_id=%s AND status='pending'", (u['id'],))
+                row = cur.fetchone()
+                if row:
+                    pending_incoming = row[0]
+            except Exception:
+                pass
+            finally:
+                close_db_connection(conn, cur)
+    return {
+        'current_user': u, 
+        'user': u,
+        'pending_incoming_orders_count': pending_incoming
+    }
 
 
 @app.context_processor
@@ -4087,24 +4106,40 @@ def listing_detail(listing_id):
 @app.route('/marketplace/my-listings')
 @user_login_required
 def my_listings():
-    """Seller's own listings management."""
+    """Seller's own listings management and incoming buying requests."""
     user = get_current_user()
     conn = get_db_connection()
     listings = []
+    incoming_orders = []
     if conn:
         try:
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("""
-                SELECT pl.*, li.filename AS primary_image
+                SELECT pl.*, li.filename AS primary_image,
+                       COUNT(DISTINCT CASE WHEN o.status = 'pending' THEN o.id END) AS pending_orders_count,
+                       COUNT(DISTINCT o.id) AS total_orders_count
                 FROM produce_listings pl
                 LEFT JOIN listing_images li ON li.listing_id = pl.id AND li.is_primary = TRUE
+                LEFT JOIN orders o ON o.listing_id = pl.id
                 WHERE pl.seller_id=%s
+                GROUP BY pl.id, li.filename
                 ORDER BY pl.created_at DESC
             """, (user['id'],))
             listings = cur.fetchall()
+
+            cur.execute("""
+                SELECT o.*, pl.crop_name, pl.variety_name,
+                       u.full_name AS buyer_name, u.phone AS buyer_phone, u.email AS buyer_email
+                FROM orders o
+                JOIN produce_listings pl ON pl.id = o.listing_id
+                JOIN users u ON u.id = o.buyer_id
+                WHERE o.seller_id=%s
+                ORDER BY CASE WHEN o.status = 'pending' THEN 0 ELSE 1 END, o.created_at DESC
+            """, (user['id'],))
+            incoming_orders = cur.fetchall()
         finally:
             close_db_connection(conn, cur)
-    return render_template('my_listings.html', user=user, listings=listings)
+    return render_template('my_listings.html', user=user, listings=listings, orders=incoming_orders)
 
 
 @app.route('/marketplace/listing/new', methods=['GET', 'POST'])
@@ -4291,10 +4326,14 @@ def order_place():
                  total, fulfilment, delivery_addr, idem_key)
             )
             order_id = cur.fetchone()['id']
-            # Deduct quantity atomically
+            # Deduct quantity atomically; mark sold if stock exhausted
             cur.execute(
-                "UPDATE produce_listings SET quantity_kg = quantity_kg - %s, updated_at=NOW() WHERE id=%s",
-                (qty, listing_id)
+                """UPDATE produce_listings 
+                   SET quantity_kg = GREATEST(0, quantity_kg - %s),
+                       status = CASE WHEN quantity_kg - %s <= 0.0001 THEN 'sold' ELSE status END,
+                       updated_at = NOW() 
+                   WHERE id = %s""",
+                (qty, qty, listing_id)
             )
             # Log event
             cur.execute(
@@ -4369,12 +4408,21 @@ def seller_orders():
 @app.route('/marketplace/order/<int:order_id>/update', methods=['POST'])
 @user_login_required
 def order_update_status(order_id):
-    """Seller updates order status."""
+    """Seller updates order status (approve, deny, dispatch, cancel, etc.)."""
     user = get_current_user()
-    new_status = request.form.get('status')
+    action = request.form.get('action', '').strip().lower()
+    new_status = request.form.get('status', '').strip().lower()
+
+    if action == 'approve':
+        new_status = 'accepted'
+    elif action in ('deny', 'reject', 'revoke'):
+        new_status = 'rejected'
+    elif action == 'cancel':
+        new_status = 'cancelled'
+
     valid_transitions = {
         'pending':   ['accepted', 'rejected'],
-        'accepted':  ['dispatched', 'cancelled'],
+        'accepted':  ['dispatched', 'cancelled', 'rejected'],
         'dispatched':['delivered'],
         'delivered': ['completed'],
     }
@@ -4386,28 +4434,56 @@ def order_update_status(order_id):
             order = cur.fetchone()
             if not order:
                 flash('Order not found or access denied.', 'error')
-                return redirect(url_for('seller_orders'))
+                return redirect(request.referrer or url_for('seller_orders'))
 
             allowed = valid_transitions.get(order['status'], [])
             if new_status not in allowed:
-                flash(f"Cannot transition from {order['status']} to {new_status}.", 'error')
-                return redirect(url_for('seller_orders'))
+                flash(f"Cannot transition order from '{order['status']}' to '{new_status}'.", 'error')
+                return redirect(request.referrer or url_for('seller_orders'))
 
+            # Update order status
             cur.execute("UPDATE orders SET status=%s, updated_at=NOW() WHERE id=%s", (new_status, order_id))
+
+            # Stock restoration logic:
+            # If order is rejected or cancelled, automatically add the requested quantity back to the listing
+            restored_qty = 0
+            if new_status in ['rejected', 'cancelled'] and order['status'] in ['pending', 'accepted']:
+                cur.execute(
+                    """UPDATE produce_listings 
+                       SET quantity_kg = quantity_kg + %s,
+                           status = CASE WHEN status = 'sold' THEN 'active' ELSE status END,
+                           updated_at = NOW() 
+                       WHERE id = %s RETURNING quantity_kg, crop_name""",
+                    (order['quantity_kg'], order['listing_id'])
+                )
+                listing_row = cur.fetchone()
+                restored_qty = float(order['quantity_kg'])
+                logger.info(f"Restored {restored_qty} kg of {listing_row['crop_name'] if listing_row else 'produce'} to listing #{order['listing_id']}")
+
+            event_desc = f"Status changed to {new_status} by seller"
+            if restored_qty > 0:
+                event_desc += f". Automatically restored {restored_qty:.2f} kg back to stock."
+
             cur.execute(
                 """INSERT INTO order_events (order_id, actor_id, event_type, description, created_at)
                    VALUES (%s,%s,%s,%s,NOW())""",
-                (order_id, user['id'], new_status, f"Status changed to {new_status} by seller")
+                (order_id, user['id'], new_status, event_desc)
             )
             conn.commit()
-            flash(f'Order {new_status}.', 'success')
+
+            if new_status == 'accepted':
+                flash(f"Order #{order_id} approved! You can now arrange fulfilment with the buyer.", 'success')
+            elif new_status in ['rejected', 'cancelled']:
+                flash(f"Order #{order_id} denied. {restored_qty:.2f} kg has been automatically added back to your remaining stock.", 'info')
+            else:
+                flash(f"Order #{order_id} updated to {new_status}.", 'success')
         except Exception as e:
             conn.rollback()
             logger.error(f"Order update error: {e}")
             flash('Update failed.', 'error')
         finally:
             close_db_connection(conn, cur)
-    return redirect(url_for('seller_orders'))
+    return redirect(request.referrer or url_for('seller_orders'))
 
 
 # ============================================================================

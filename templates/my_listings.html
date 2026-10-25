@@ -1,26 +1,218 @@
-﻿{% extends 'app_base.html' %}
-{% block title %}My Listings - PlantWise{% endblock %}
+{% extends 'app_base.html' %}
+{% block title %}My Listings & Incoming Orders - PlantWise{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div><h1>My Listings</h1><p>Manage your produce for sale</p></div>
-    <a href="{{ url_for('listing_new') }}" class="btn btn-primary"><i data-lucide="plus" style="width:16px;height:16px;margin-right:4px;"></i> New Listing</a>
+<div class="workspace-page-header">
+    <div>
+        <h1 class="workspace-page-title">Produce Marketplace</h1>
+        <p class="workspace-page-subtitle">Manage your produce listings and review incoming buyer requests</p>
+    </div>
+    <div class="workspace-page-actions">
+        <a href="{{ url_for('listing_new') }}" class="btn btn-primary">
+            <i data-lucide="plus" style="width:16px;height:16px;"></i>
+            <span>Sell New Produce</span>
+        </a>
+    </div>
 </div>
+
+<!-- Marketplace Tabs -->
+<div class="marketplace-nav-tabs">
+    <a href="{{ url_for('marketplace') }}" class="marketplace-tab">Browse Market</a>
+    <a href="{{ url_for('my_listings') }}" class="marketplace-tab active">My Listings</a>
+    <a href="{{ url_for('seller_orders') }}" class="marketplace-tab">
+        Incoming Requests
+        {% if pending_incoming_orders_count and pending_incoming_orders_count > 0 %}
+        <span class="badge-tab-count">{{ pending_incoming_orders_count }}</span>
+        {% endif %}
+    </a>
+    <a href="{{ url_for('my_orders') }}" class="marketplace-tab">My Purchases</a>
+</div>
+
+<!-- Section 1: Incoming Buying Requests (If Any) -->
+{% if orders %}
+<div class="data-card" style="margin-bottom: 2rem; border-left: 4px solid var(--primary-green, #0e7a46);">
+    <div class="data-card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #edf2ed; padding:1.25rem 1.5rem;">
+        <div>
+            <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:var(--text-primary, #0f172a); display:flex; align-items:center; gap:8px;">
+                <i data-lucide="inbox" style="width:20px; height:20px; color:var(--primary-green, #0e7a46);"></i>
+                Incoming Buying Requests
+            </h3>
+            <p style="margin:4px 0 0 0; font-size:0.85rem; color:var(--text-muted, #64748b);">
+                Buyers who have requested to purchase your produce. You can approve or deny requests; denied orders immediately return stock back to your listing.
+            </p>
+        </div>
+        <a href="{{ url_for('seller_orders') }}" class="btn btn-sm btn-ghost">View All Orders &rarr;</a>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table class="data-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Produce</th>
+                    <th>Qty Requested</th>
+                    <th>Total Price</th>
+                    <th>Buyer Details</th>
+                    <th>Fulfilment</th>
+                    <th>Status</th>
+                    <th style="min-width: 190px;">Action / Decision</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for o in orders %}
+            <tr style="{% if o.status == 'pending' %}background-color: #fafdfa;{% endif %}">
+                <td>
+                    <strong>{{ o.crop_name }}</strong>
+                    {% if o.variety_name %}
+                    <br><span style="font-size:0.8rem; color:var(--text-light, #94a3b8);">{{ o.variety_name }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span style="font-weight:700; font-size:0.95rem; color:var(--text-primary, #0f172a);">{{ o.quantity_kg }} kg</span>
+                </td>
+                <td>
+                    <strong>KES {{ "%.2f"|format(o.total_amount) }}</strong>
+                </td>
+                <td>
+                    <div style="font-weight:600; color:var(--text-primary, #0f172a);">{{ o.buyer_name }}</div>
+                    {% if o.buyer_phone %}
+                    <div style="font-size:0.8rem; color:var(--text-muted, #64748b); display:flex; align-items:center; gap:4px;">
+                        <i data-lucide="phone" style="width:12px; height:12px;"></i> {{ o.buyer_phone }}
+                    </div>
+                    {% endif %}
+                </td>
+                <td>
+                    <span style="text-transform: capitalize; font-size:0.85rem;">{{ o.fulfilment }}</span>
+                    {% if o.delivery_address %}
+                    <br><span style="font-size:0.75rem; color:var(--text-light, #94a3b8);" title="{{ o.delivery_address }}">{{ o.delivery_address[:25] }}{% if o.delivery_address|length > 25 %}...{% endif %}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['accepted'] %}badge-info{% elif o.status == 'pending' %}badge-warning{% elif o.status == 'dispatched' %}badge-purple{% elif o.status in ['rejected','cancelled'] %}badge-error{% else %}badge-info{% endif %}">
+                        {% if o.status == 'pending' %}Pending Approval
+                        {% elif o.status == 'accepted' %}Approved
+                        {% elif o.status == 'rejected' %}Denied
+                        {% elif o.status == 'cancelled' %}Revoked
+                        {% else %}{{ o.status.title() }}{% endif %}
+                    </span>
+                </td>
+                <td>
+                    {% if o.status == 'pending' %}
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <!-- Approve Request Form -->
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="approve">
+                            <button type="submit" class="btn btn-sm btn-primary" title="Approve order and confirm transaction">
+                                <i data-lucide="check" style="width:14px; height:14px;"></i> Approve
+                            </button>
+                        </form>
+                        <!-- Deny Request Form (Restores Stock) -->
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Denying this request will automatically add the {{ o.quantity_kg }} kg back to your stock. Continue?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="deny">
+                            <button type="submit" class="btn-outline-danger" title="Deny request and return stock to listing">
+                                <i data-lucide="x" style="width:14px; height:14px;"></i> Deny
+                            </button>
+                        </form>
+                    </div>
+                    {% elif o.status == 'accepted' %}
+                    <div style="display:flex; gap:6px;">
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="dispatched">
+                            <button type="submit" class="btn btn-sm btn-secondary" title="Mark produce dispatched/handed over">
+                                Dispatch
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Revoking this approved order will add {{ o.quantity_kg }} kg back to your listing stock. Continue?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="cancel">
+                            <button type="submit" class="btn btn-sm btn-ghost" title="Cancel and return stock">
+                                Revoke
+                            </button>
+                        </form>
+                    </div>
+                    {% elif o.status in ['rejected', 'cancelled'] %}
+                    <span style="font-size:0.8rem; color:#16a34a; font-weight:600;">
+                        Stock restored (+{{ o.quantity_kg }} kg)
+                    </span>
+                    {% elif o.status == 'dispatched' %}
+                    <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="status" value="delivered">
+                        <button type="submit" class="btn btn-sm btn-secondary">Mark Delivered</button>
+                    </form>
+                    {% elif o.status == 'delivered' %}
+                    <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="status" value="completed">
+                        <button type="submit" class="btn btn-sm btn-primary">Complete</button>
+                    </form>
+                    {% else %}
+                    <span style="font-size:0.8rem; color:var(--text-light, #94a3b8);">Order Completed</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Section 2: My Produce Listings -->
+<div class="page-header" style="margin-top: 1rem;">
+    <div>
+        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #0f172a); margin: 0;">My Produce for Sale</h2>
+        <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-muted, #64748b);">Your active and archived produce listings on the PlantWise marketplace</p>
+    </div>
+</div>
+
 {% if listings %}
 <div class="data-card">
     <table class="data-table">
-        <thead><tr><th>Crop</th><th>Qty (kg)</th><th>Price/kg</th><th>County</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Crop & Variety</th>
+                <th>Available Stock</th>
+                <th>Price per kg</th>
+                <th>County</th>
+                <th>Status</th>
+                <th>Listed Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
         <tbody>
         {% for l in listings %}
         <tr>
-            <td><strong>{{ l.crop_name }}</strong>{% if l.variety_name %}<br><span style="font-size:.8rem;color:var(--text-light);">{{ l.variety_name }}</span>{% endif %}</td>
-            <td>{{ l.quantity_kg }}</td>
+            <td>
+                <strong>{{ l.crop_name }}</strong>
+                {% if l.variety_name %}
+                <br><span style="font-size:0.8rem; color:var(--text-light, #94a3b8);">{{ l.variety_name }}</span>
+                {% endif %}
+                {% if l.pending_orders_count and l.pending_orders_count > 0 %}
+                <span class="badge badge-warning" style="margin-left: 6px;" title="{{ l.pending_orders_count }} incoming request(s)">
+                    {{ l.pending_orders_count }} pending request
+                </span>
+                {% endif %}
+            </td>
+            <td>
+                <span style="font-weight: 700; font-size: 0.95rem; color: {% if l.quantity_kg <= 0 %}#dc2626{% else %}var(--text-primary, #0f172a){% endif %};">
+                    {{ l.quantity_kg }} kg
+                </span>
+            </td>
             <td>KES {{ "%.2f"|format(l.price_per_kg) }}</td>
             <td>{{ l.county_name or '—' }}</td>
-            <td><span class="badge {% if l.status == 'active' %}badge-success{% elif l.status == 'paused' %}badge-warning{% elif l.status == 'sold' %}badge-purple{% else %}badge-error{% endif %}">{{ l.status }}</span></td>
-            <td style="font-size:.8rem;color:var(--text-light);">{{ l.created_at.strftime('%d %b %Y') if l.created_at else '—' }}</td>
-            <td style="display:flex;gap:.4rem;">
+            <td>
+                <span class="badge {% if l.status == 'active' %}badge-success{% elif l.status == 'paused' %}badge-warning{% elif l.status == 'sold' %}badge-purple{% else %}badge-error{% endif %}">
+                    {{ l.status }}
+                </span>
+            </td>
+            <td style="font-size:0.8rem; color:var(--text-light, #94a3b8);">
+                {{ l.created_at.strftime('%d %b %Y') if l.created_at else '—' }}
+            </td>
+            <td style="display:flex; gap:0.4rem;">
                 <a href="{{ url_for('listing_detail', listing_id=l.id) }}" class="btn btn-sm btn-ghost">View</a>
-                <a href="{{ url_for('listing_edit', listing_id=l.id) }}" class="btn btn-sm btn-outline">Edit</a>
+                <a href="{{ url_for('listing_edit', listing_id=l.id) }}" class="btn btn-sm btn-secondary">Edit</a>
             </td>
         </tr>
         {% endfor %}
@@ -28,6 +220,11 @@
     </table>
 </div>
 {% else %}
-<div class="empty-state"><div class="empty-state-icon">🏪</div><h3>No listings yet</h3><p>Start selling your produce on the marketplace.</p><a href="{{ url_for('listing_new') }}" class="btn btn-primary">Create First Listing</a></div>
+<div class="empty-state">
+    <div class="empty-state-icon">🏪</div>
+    <h3>No listings yet</h3>
+    <p>Start selling your farm produce directly to buyers across Kenya.</p>
+    <a href="{{ url_for('listing_new') }}" class="btn btn-primary">Create First Listing</a>
+</div>
 {% endif %}
 {% endblock %}

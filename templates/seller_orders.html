@@ -1,40 +1,161 @@
-﻿{% extends 'app_base.html' %}
-{% block title %}Seller Orders - PlantWise{% endblock %}
+{% extends 'app_base.html' %}
+{% block title %}Incoming Buying Requests - PlantWise{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>Incoming Orders</h1><p>Manage orders from buyers</p></div></div>
+<div class="workspace-page-header">
+    <div>
+        <h1 class="workspace-page-title">Incoming Buying Requests</h1>
+        <p class="workspace-page-subtitle">Review, approve, or deny purchase requests from buyers</p>
+    </div>
+    <div class="workspace-page-actions">
+        <a href="{{ url_for('listing_new') }}" class="btn btn-primary">
+            <i data-lucide="plus" style="width:16px;height:16px;"></i>
+            <span>Sell New Produce</span>
+        </a>
+    </div>
+</div>
+
+<!-- Marketplace Tabs -->
+<div class="marketplace-nav-tabs">
+    <a href="{{ url_for('marketplace') }}" class="marketplace-tab">Browse Market</a>
+    <a href="{{ url_for('my_listings') }}" class="marketplace-tab">My Listings</a>
+    <a href="{{ url_for('seller_orders') }}" class="marketplace-tab active">
+        Incoming Requests
+        {% if pending_incoming_orders_count and pending_incoming_orders_count > 0 %}
+        <span class="badge-tab-count">{{ pending_incoming_orders_count }}</span>
+        {% endif %}
+    </a>
+    <a href="{{ url_for('my_orders') }}" class="marketplace-tab">My Purchases</a>
+</div>
+
 {% if orders %}
 <div class="data-card">
-    <table class="data-table">
-        <thead><tr><th>Crop</th><th>Qty (kg)</th><th>Total</th><th>Buyer</th><th>Phone</th><th>Status</th><th>Update</th></tr></thead>
-        <tbody>
-        {% for o in orders %}
-        <tr>
-            <td><strong>{{ o.crop_name }}</strong></td>
-            <td>{{ o.quantity_kg }}</td>
-            <td>KES {{ "%.2f"|format(o.total_amount) }}</td>
-            <td>{{ o.buyer_name }}</td>
-            <td>{{ o.buyer_phone or '—' }}</td>
-            <td><span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['pending','accepted'] %}badge-info{% elif o.status == 'dispatched' %}badge-purple{% elif o.status in ['rejected','cancelled'] %}badge-error{% else %}badge-warning{% endif %}">{{ o.status }}</span></td>
-            <td>
-                {% set next_statuses = {'pending':['accepted','rejected'],'accepted':['dispatched','cancelled'],'dispatched':['delivered'],'delivered':['completed']} %}
-                {% if o.status in next_statuses %}
-                <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:flex;gap:.3rem;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <select name="status" style="font-size:.8rem;padding:4px 8px;border:1px solid var(--border-color);border-radius:.5rem;">
-                        {% for s in next_statuses[o.status] %}
-                        <option value="{{ s }}">{{ s }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-primary">Update</button>
-                </form>
-                {% else %}—{% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+    <div style="overflow-x: auto;">
+        <table class="data-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Produce Crop</th>
+                    <th>Qty Requested</th>
+                    <th>Total (KES)</th>
+                    <th>Buyer Contact</th>
+                    <th>Fulfilment / Delivery</th>
+                    <th>Order Status</th>
+                    <th>Date</th>
+                    <th style="min-width: 200px;">Action / Decision</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for o in orders %}
+            <tr style="{% if o.status == 'pending' %}background-color: #fafdfa;{% endif %}">
+                <td>
+                    <strong>{{ o.crop_name }}</strong>
+                    {% if o.variety_name %}
+                    <br><span style="font-size:0.8rem; color:var(--text-light, #94a3b8);">{{ o.variety_name }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span style="font-weight:700; font-size:0.95rem; color:var(--text-primary, #0f172a);">{{ o.quantity_kg }} kg</span>
+                </td>
+                <td>
+                    <strong>KES {{ "%.2f"|format(o.total_amount) }}</strong>
+                </td>
+                <td>
+                    <div style="font-weight:600; color:var(--text-primary, #0f172a);">{{ o.buyer_name }}</div>
+                    {% if o.buyer_phone %}
+                    <div style="font-size:0.8rem; color:var(--text-muted, #64748b); display:flex; align-items:center; gap:4px;">
+                        <i data-lucide="phone" style="width:12px; height:12px;"></i> {{ o.buyer_phone }}
+                    </div>
+                    {% endif %}
+                    {% if o.buyer_email %}
+                    <div style="font-size:0.75rem; color:var(--text-light, #94a3b8);">{{ o.buyer_email }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <span style="text-transform: capitalize; font-size:0.85rem; font-weight:600;">{{ o.fulfilment }}</span>
+                    {% if o.delivery_address %}
+                    <br><span style="font-size:0.75rem; color:var(--text-light, #94a3b8);" title="{{ o.delivery_address }}">{{ o.delivery_address[:30] }}{% if o.delivery_address|length > 30 %}...{% endif %}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge {% if o.status in ['completed','delivered'] %}badge-success{% elif o.status in ['accepted'] %}badge-info{% elif o.status == 'pending' %}badge-warning{% elif o.status == 'dispatched' %}badge-purple{% elif o.status in ['rejected','cancelled'] %}badge-error{% else %}badge-info{% endif %}">
+                        {% if o.status == 'pending' %}Pending Approval
+                        {% elif o.status == 'accepted' %}Approved
+                        {% elif o.status == 'rejected' %}Denied
+                        {% elif o.status == 'cancelled' %}Revoked
+                        {% else %}{{ o.status.title() }}{% endif %}
+                    </span>
+                </td>
+                <td style="font-size:0.8rem; color:var(--text-light, #94a3b8); white-space:nowrap;">
+                    {{ o.created_at.strftime('%d %b %Y, %H:%M') if o.created_at else '—' }}
+                </td>
+                <td>
+                    {% if o.status == 'pending' %}
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <!-- Approve Request Form -->
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="approve">
+                            <button type="submit" class="btn btn-sm btn-primary" title="Approve order and confirm transaction">
+                                <i data-lucide="check" style="width:14px; height:14px;"></i> Approve
+                            </button>
+                        </form>
+                        <!-- Deny Request Form (Restores Stock) -->
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Denying this request will automatically add the {{ o.quantity_kg }} kg back to your stock. Continue?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="deny">
+                            <button type="submit" class="btn-outline-danger" title="Deny request and return stock to listing">
+                                <i data-lucide="x" style="width:14px; height:14px;"></i> Deny
+                            </button>
+                        </form>
+                    </div>
+                    {% elif o.status == 'accepted' %}
+                    <div style="display:flex; gap:6px;">
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="dispatched">
+                            <button type="submit" class="btn btn-sm btn-secondary" title="Mark produce dispatched/handed over">
+                                Dispatch
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Revoking this approved order will add {{ o.quantity_kg }} kg back to your listing stock. Continue?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="cancel">
+                            <button type="submit" class="btn btn-sm btn-ghost" title="Cancel and return stock">
+                                Revoke
+                            </button>
+                        </form>
+                    </div>
+                    {% elif o.status in ['rejected', 'cancelled'] %}
+                    <span style="font-size:0.8rem; color:#16a34a; font-weight:600;">
+                        Stock restored (+{{ o.quantity_kg }} kg)
+                    </span>
+                    {% elif o.status == 'dispatched' %}
+                    <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="status" value="delivered">
+                        <button type="submit" class="btn btn-sm btn-secondary">Mark Delivered</button>
+                    </form>
+                    {% elif o.status == 'delivered' %}
+                    <form method="POST" action="{{ url_for('order_update_status', order_id=o.id) }}" style="display:inline; margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="status" value="completed">
+                        <button type="submit" class="btn btn-sm btn-primary">Complete</button>
+                    </form>
+                    {% else %}
+                    <span style="font-size:0.8rem; color:var(--text-light, #94a3b8);">Order Completed</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% else %}
-<div class="empty-state"><div class="empty-state-icon">📋</div><h3>No orders yet</h3><p>When buyers place orders on your listings, they will appear here.</p></div>
+<div class="empty-state">
+    <div class="empty-state-icon">📋</div>
+    <h3>No incoming orders yet</h3>
+    <p>When buyers request to purchase your produce listings, their requests will appear here for you to approve or deny.</p>
+    <a href="{{ url_for('my_listings') }}" class="btn btn-primary">View My Listings</a>
+</div>
 {% endif %}
 {% endblock %}
